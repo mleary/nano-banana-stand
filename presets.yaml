@@ -1,0 +1,39 @@
+presets:
+- name: Flat Vector - Calm
+  description: ''
+  style_prompt: Flat vector editorial illustration with a muted, desaturated, color
+    palette. Mid-century modern aesthetic. Calm and approachable.
+- name: Retro illustration
+  description: ''
+  style_prompt: Retro-futurist editorial illustration with sleek shapes, limited contrast,
+    soft grain, and a refined late-60s/70s speculative design influence. Muted but
+    confident palette. Clean, conceptual, modern, and visually memorable for presentation
+    storytelling.
+- name: Cut paper
+  description: ''
+  style_prompt: Cut-paper collage illustration with layered paper shapes, soft shadows,
+    tactile edges, and modern editorial composition. Muted contemporary palette, playful
+    but professional. Handmade visual storytelling style with clear subject emphasis
+    and uncluttered background.
+- name: Water color
+  description: ''
+  style_prompt: Watercolor illustration with soft edges, layered washes, and subtle
+    pigment blooms. Gentle earthy palette, airy composition, refined editorial style.
+    Serene and sophisticated. Minimal background clutter, high visual clarity, presentation-ready
+    illustration.
+- name: Line drawing
+  description: ''
+  style_prompt: Technical line illustration with precise strokes, minimal color accents,
+    diagram-inspired composition, and clean white space. Modern architectural and
+    systems-thinking aesthetic. Crisp, intelligent, and understated. Suitable for
+    executive or technical presentations.
+- name: Flat 2d - kids
+  description: ''
+  style_prompt: Flat 2D preschool-style illustration with friendly rounded forms,
+    light blue and cream palette, clean edges, playful motion, simple environment
+    design, optimistic and cozy mood, highly readable for presentation use.
+- name: Retro comic book
+  description: ''
+  style_prompt: Retro silver-age comic illustration with clean linework, bright flat
+    colors, vintage halftone texture, expressive faces, simplified backgrounds, playful
+    dramatic action, nostalgic comic book energy, presentation-friendly composition.

@@ -4,8 +4,6 @@ Providers:
   - google-gemini  : Google Gemini image generation via google-genai SDK
                      (uses chatlas ChatGoogle for prompt enhancement)
   - openai         : DALL-E 3 via chatlas ChatOpenAI
-  - fal            : fal.ai Flux models
-  - replicate      : Replicate Flux models
 
 Set IMAGE_PROVIDER env var (default: google-gemini).
 """
@@ -26,9 +24,11 @@ from src.storage import save_image_bytes, save_image_from_url
 
 PROVIDERS = {
     "google-gemini": {
-        "label": "Google Gemini (Imagen / Gemini Flash)",
-        "default_model": "imagen-3.0-generate-002",
+        "label": "Google Gemini (Imagen)",
+        "default_model": "imagen-4.0-generate-001",
         "models": [
+            "imagen-4.0-generate-001",
+            "imagen-4.0-fast-generate-001",
             "imagen-3.0-generate-002",
             "imagen-3.0-fast-generate-001",
         ],
@@ -41,27 +41,6 @@ PROVIDERS = {
         "models": ["dall-e-3", "dall-e-2"],
         "api_key_env": "OPENAI_API_KEY",
         "requires": ["chatlas"],
-    },
-    "fal": {
-        "label": "fal.ai (Flux)",
-        "default_model": "fal-ai/flux/dev",
-        "models": [
-            "fal-ai/flux/dev",
-            "fal-ai/flux/schnell",
-            "fal-ai/flux-pro",
-        ],
-        "api_key_env": "FAL_KEY",
-        "requires": ["fal-client"],
-    },
-    "replicate": {
-        "label": "Replicate (Flux)",
-        "default_model": "black-forest-labs/flux-dev",
-        "models": [
-            "black-forest-labs/flux-dev",
-            "black-forest-labs/flux-schnell",
-        ],
-        "api_key_env": "REPLICATE_API_TOKEN",
-        "requires": ["replicate"],
     },
 }
 
@@ -103,7 +82,7 @@ def _generate_google_gemini(
 
     number_of_images = settings.get("num_images", 1)
     aspect_ratio = settings.get("aspect_ratio", "1:1")
-    safety_filter = settings.get("safety_filter_level", "BLOCK_SOME")
+    safety_filter = settings.get("safety_filter_level", "BLOCK_LOW_AND_ABOVE")
 
     response = client.models.generate_images(
         model=model,
@@ -179,70 +158,42 @@ def _generate_openai(
     return image_bytes, "png"
 
 
-def _generate_fal(
+def _generate_gemini_with_reference(
     prompt: str,
-    model: str,
+    reference_image_bytes: bytes,
     api_key: str,
     settings: dict,
 ) -> tuple[bytes, str]:
-    """Generate image using fal.ai."""
+    """Generate image using Gemini generate_content() with a reference image input."""
     try:
-        import fal_client
+        from google import genai
+        from google.genai import types as genai_types
     except ImportError as exc:
         raise ImportError(
-            "fal-client package is required for fal.ai provider. "
-            "Install with: pip install fal-client"
+            "google-genai package is required for Google Gemini provider. "
+            "Install it with: pip install google-genai"
         ) from exc
 
-    os.environ["FAL_KEY"] = api_key
-    image_size = settings.get("image_size", "square_hd")
-    num_steps = settings.get("num_inference_steps", 28)
-    seed = settings.get("seed")
+    client = genai.Client(api_key=api_key)
 
-    args: dict[str, Any] = dict(
-        prompt=prompt,
-        image_size=image_size,
-        num_inference_steps=num_steps,
+    image_part = genai_types.Part.from_bytes(
+        data=reference_image_bytes,
+        mime_type="image/jpeg",
     )
-    if seed:
-        args["seed"] = seed
 
-    result = fal_client.run(model, arguments=args)
-    image_url = result["images"][0]["url"]
-    return _fetch_url(image_url), "png"
-
-
-def _generate_replicate(
-    prompt: str,
-    model: str,
-    api_key: str,
-    settings: dict,
-) -> tuple[bytes, str]:
-    """Generate image using Replicate."""
-    try:
-        import replicate
-    except ImportError as exc:
-        raise ImportError(
-            "replicate package is required for Replicate provider. "
-            "Install with: pip install replicate"
-        ) from exc
-
-    os.environ["REPLICATE_API_TOKEN"] = api_key
-    width = settings.get("width", 1024)
-    height = settings.get("height", 1024)
-    steps = settings.get("num_inference_steps", 28)
-
-    output = replicate.run(
-        model,
-        input=dict(
-            prompt=prompt,
-            width=width,
-            height=height,
-            num_inference_steps=steps,
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-image",
+        contents=[image_part, prompt],
+        config=genai_types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
         ),
     )
-    image_url = output[0] if isinstance(output, list) else output
-    return _fetch_url(str(image_url)), "png"
+
+    for part in response.candidates[0].content.parts:
+        if part.inline_data is not None:
+            return part.inline_data.data, "png"
+
+    raise RuntimeError("Gemini returned no image data for reference-guided generation.")
 
 
 def _fetch_url(url: str) -> bytes:
@@ -264,6 +215,7 @@ def generate_image(
     api_key: str | None = None,
     settings: dict | None = None,
     enhance_prompt: bool = False,
+    reference_image: bytes | None = None,
 ) -> GenerationResult:
     """Generate an image and persist it to storage.
 
@@ -308,22 +260,18 @@ def generate_image(
 
     # Generate
     if provider == "google-gemini":
-        image_bytes, ext = _generate_google_gemini(
-            final_prompt, resolved_model, resolved_key, resolved_settings
-        )
+        if reference_image:
+            image_bytes, ext = _generate_gemini_with_reference(
+                final_prompt, reference_image, resolved_key, resolved_settings
+            )
+        else:
+            image_bytes, ext = _generate_google_gemini(
+                final_prompt, resolved_model, resolved_key, resolved_settings
+            )
     elif provider == "openai":
         image_bytes, ext = _generate_openai(
             final_prompt, resolved_model, resolved_key, resolved_settings
         )
-    elif provider == "fal":
-        image_bytes, ext = _generate_fal(
-            final_prompt, resolved_model, resolved_key, resolved_settings
-        )
-    elif provider == "replicate":
-        image_bytes, ext = _generate_replicate(
-            final_prompt, resolved_model, resolved_key, resolved_settings
-        )
-
     output_path = save_image_bytes(image_bytes, ext)
 
     return GenerationResult(

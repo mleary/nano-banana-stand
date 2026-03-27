@@ -1,6 +1,6 @@
 # AI Image Generator
 
-Streamlit app for reproducible presentation image generation. Prompts, style settings, and generated images are stored together so every run can be reproduced or iterated on.
+Streamlit app for reproducible presentation image generation. Prompts, style settings, and generated images are stored together so every run can be reproduced or iterated on. Inspired by (hadley/bananarama)[https://github.com/hadley/bananarama]
 
 ## Features
 
@@ -26,8 +26,6 @@ streamlit run app.py
 |---|---|---|
 | `google-gemini` | `GOOGLE_API_KEY` | Default. Uses Imagen 3 for generation + `chatlas` ChatGoogle for prompt enhancement |
 | `openai` | `OPENAI_API_KEY` | DALL-E 3 / DALL-E 2 |
-| `fal` | `FAL_KEY` | Flux Dev / Schnell / Pro |
-| `replicate` | `REPLICATE_API_TOKEN` | Flux Dev / Schnell |
 
 ## chatlas integration
 
