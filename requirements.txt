@@ -1,0 +1,18 @@
+# Core app
+streamlit>=1.35.0
+
+# LLM provider abstraction (posit-dev) — used for Google Gemini prompt enhancement
+# and as the unified chat interface across providers
+chatlas>=0.4.0
+
+# Google Gemini image generation (Imagen 3)
+google-genai>=1.0.0
+
+# OpenAI DALL-E (also pulled in by chatlas OpenAI provider)
+openai>=1.30.0
+
+# fal.ai Flux models
+fal-client>=0.5.0
+
+# Replicate Flux models
+replicate>=0.31.0

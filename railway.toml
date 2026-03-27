@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "streamlit run app.py --server.port $PORT --server.address 0.0.0.0"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+
+# Mount a Railway persistent volume at /data
+# Set these env vars in Railway dashboard:
+#   DB_PATH=/data/db.sqlite3
+#   STORAGE_DIR=/data/images
