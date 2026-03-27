@@ -1,16 +1,17 @@
 # AI Image Generator
 
-Streamlit app for reproducible presentation image generation. Prompts, style settings, and generated images are stored together so every run can be reproduced or iterated on. Inspired by (hadley/bananarama)[https://github.com/hadley/bananarama]
+Streamlit app for reproducible presentation image generation. Prompts, style settings, and generated images are stored together so every run can be reproduced or iterated on. 
+
+Inspired by [hadley/bananarama](https://github.com/hadley/bananarama).
 
 ## Features
 
-- **Multi-provider image generation** — Google Gemini (Imagen 3), OpenAI DALL-E 3, fal.ai, Replicate
-- **Provider selection in UI** — switch providers without touching config files
-- **chatlas integration** — uses [posit-dev/chatlas](https://github.com/posit-dev/chatlas) `ChatGoogle` for Gemini-powered prompt enhancement before generation
-- **Style presets** — save and reuse style prompts across generations
+- **Multi-provider image generation** — Google Gemini (Imagen 4), OpenAI DALL-E 3
+- **Reference image support** — upload a photo or pick from a saved library to guide generation (Gemini only)
+- **Style presets** — save and reuse style prompts stored in `presets.yaml`
+- **Prompt enhancement** — optional Gemini-powered prompt refinement via [chatlas](https://github.com/posit-dev/chatlas)
 - **Full reproducibility** — every generation stores prompt, style, provider, model, settings, and timestamp
 - **Generation history** — browse, search, download, and rerun past generations
-- **Railway deployment** — persistent volume for database and image storage
 
 ## Quick start
 
@@ -24,25 +25,24 @@ streamlit run app.py
 
 | Provider | Env var | Notes |
 |---|---|---|
-| `google-gemini` | `GOOGLE_API_KEY` | Default. Uses Imagen 3 for generation + `chatlas` ChatGoogle for prompt enhancement |
+| `google-gemini` | `GOOGLE_API_KEY` | Default. Uses Imagen 4 for generation; `gemini-2.5-flash-image` for reference-guided generation |
 | `openai` | `OPENAI_API_KEY` | DALL-E 3 / DALL-E 2 |
 
-## chatlas integration
+## Style presets
 
-[chatlas](https://github.com/posit-dev/chatlas) by posit-dev is used as the unified LLM interface. When the **Enhance prompt with Gemini** checkbox is enabled, `ChatGoogle` sends your prompt to Gemini for refinement before image generation:
+Presets are stored in `presets.yaml` at the project root — edit it directly in any text editor or manage them via the **Presets** tab in the app.
 
-```python
-from chatlas import ChatGoogle
+## Reference images
 
-chat = ChatGoogle(api_key="...")
-enhanced = chat.chat("Improve this image prompt: ...")
-```
+Upload a one-off reference image in the Generate tab, or save permanent references via the **References** tab. Permanent references are stored in `data/references/` (gitignored).
 
-This makes it easy to swap in other chatlas-supported providers (Anthropic, OpenAI, Azure, Ollama) for the prompt-enhancement step independently from the image generation provider.
+## Persistence
 
-## Persistence schema
+### SQLite — `data/db.sqlite3`
 
-### `generations`
+Stores generation history only. Path overridden by `DB_PATH` env var.
+
+#### `generations`
 | Column | Type | Description |
 |---|---|---|
 | id | INTEGER | Primary key |
@@ -50,32 +50,11 @@ This makes it easy to swap in other chatlas-supported providers (Anthropic, Open
 | project_name | TEXT | Deck / presentation grouping |
 | tags | TEXT | Comma-separated tags |
 | base_prompt | TEXT | Original user prompt |
-| style_preset_id | INTEGER | FK → style_presets |
 | style_prompt | TEXT | Style text appended to base prompt |
 | final_prompt | TEXT | Combined prompt sent to provider |
 | provider | TEXT | e.g. `google-gemini` |
-| model | TEXT | e.g. `imagen-3.0-generate-002` |
+| model | TEXT | e.g. `imagen-4.0-generate-001` |
 | settings | TEXT | JSON blob of provider-specific settings |
 | output_path | TEXT | Local path to saved image file |
 | created_at | TEXT | ISO-8601 UTC timestamp |
 
-### `style_presets`
-| Column | Type | Description |
-|---|---|---|
-| id | INTEGER | Primary key |
-| name | TEXT | Unique preset name |
-| description | TEXT | Optional description |
-| style_prompt | TEXT | Reusable style text |
-| created_at | TEXT | ISO-8601 UTC timestamp |
-
-## Railway deployment
-
-1. Create a Railway project and connect this repo.
-2. Add a **Volume** mounted at `/data`.
-3. Set environment variables:
-   ```
-   DB_PATH=/data/db.sqlite3
-   STORAGE_DIR=/data/images
-   GOOGLE_API_KEY=...
-   ```
-4. Deploy — Railway reads `railway.toml` for build and start commands.
