@@ -19,6 +19,7 @@ from src import database as db
 from src import presets as preset_store
 from src import references as ref_store
 from src.generator import PROVIDERS, generate_image, get_provider_api_key
+from src.references import parse_reference_tokens, resolve_references
 from src.storage import load_image_bytes
 
 # ---------------------------------------------------------------------------
@@ -126,8 +127,21 @@ with tab_generate:
         value=st.session_state.rerun_base_prompt,
         height=120,
         placeholder="A professional headshot of a data scientist presenting at a conference…",
+        help="Use [name] to inline a saved reference image, e.g. [matt] or [logo].",
     )
     st.session_state.rerun_base_prompt = base_prompt
+
+    # Live feedback for inline [reference] tokens
+    if base_prompt:
+        tokens = parse_reference_tokens(base_prompt)
+        if tokens:
+            ref_stems = {p.stem.lower() for p in ref_store.list_references()}
+            found_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") in ref_stems]
+            missing_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") not in ref_stems]
+            if found_tokens:
+                st.caption(f"Inline references found: {', '.join(found_tokens)}")
+            if missing_tokens:
+                st.caption(f"Unknown references (will be ignored): {', '.join(missing_tokens)}")
 
     presets = preset_store.get_presets()
     preset_options = ["— none —"] + [p["name"] for p in presets]
@@ -180,6 +194,9 @@ with tab_generate:
         elif not api_key_input:
             st.error(f"`{PROVIDERS[current_provider]['api_key_env']}` environment variable is not set.")
         else:
+            inline_ref_bytes, missing_refs = resolve_references(parse_reference_tokens(base_prompt))
+            if missing_refs:
+                st.warning(f"Reference(s) not found in library: {', '.join(missing_refs)}")
             with st.spinner("Generating…"):
                 try:
                     result = generate_image(
@@ -191,6 +208,7 @@ with tab_generate:
                         settings=extra_settings,
                         enhance_prompt=enhance,
                         reference_image=reference_image_bytes,
+                        reference_images=inline_ref_bytes or None,
                     )
 
                     gen_id = db.save_generation(

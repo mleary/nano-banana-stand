@@ -160,11 +160,11 @@ def _generate_openai(
 
 def _generate_gemini_with_reference(
     prompt: str,
-    reference_image_bytes: bytes,
+    reference_images: list[bytes],
     api_key: str,
     settings: dict,
 ) -> tuple[bytes, str]:
-    """Generate image using Gemini generate_content() with a reference image input."""
+    """Generate image using Gemini generate_content() with one or more reference images."""
     try:
         from google import genai
         from google.genai import types as genai_types
@@ -176,14 +176,15 @@ def _generate_gemini_with_reference(
 
     client = genai.Client(api_key=api_key)
 
-    image_part = genai_types.Part.from_bytes(
-        data=reference_image_bytes,
-        mime_type="image/jpeg",
-    )
+    parts = []
+    for img in reference_images:
+        mime_type = "image/png" if img[:4] == b'\x89PNG' else "image/jpeg"
+        parts.append(genai_types.Part.from_bytes(data=img, mime_type=mime_type))
+    parts.append(prompt)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash-image",
-        contents=[image_part, prompt],
+        contents=parts,
         config=genai_types.GenerateContentConfig(
             response_modalities=["IMAGE"],
         ),
@@ -216,6 +217,7 @@ def generate_image(
     settings: dict | None = None,
     enhance_prompt: bool = False,
     reference_image: bytes | None = None,
+    reference_images: list[bytes] | None = None,
 ) -> GenerationResult:
     """Generate an image and persist it to storage.
 
@@ -258,17 +260,24 @@ def generate_image(
     if enhance_prompt and provider == "google-gemini":
         final_prompt = _enhance_prompt_with_chatlas_google(final_prompt, resolved_key)
 
+    # Merge reference image sources
+    resolved_refs: list[bytes] = list(reference_images) if reference_images else []
+    if reference_image is not None:
+        resolved_refs.insert(0, reference_image)
+
     # Generate
     if provider == "google-gemini":
-        if reference_image:
+        if resolved_refs:
             image_bytes, ext = _generate_gemini_with_reference(
-                final_prompt, reference_image, resolved_key, resolved_settings
+                final_prompt, resolved_refs, resolved_key, resolved_settings
             )
         else:
             image_bytes, ext = _generate_google_gemini(
                 final_prompt, resolved_model, resolved_key, resolved_settings
             )
     elif provider == "openai":
+        if resolved_refs:
+            raise ValueError("OpenAI DALL-E does not support reference images.")
         image_bytes, ext = _generate_openai(
             final_prompt, resolved_model, resolved_key, resolved_settings
         )

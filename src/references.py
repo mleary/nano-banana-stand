@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -44,3 +45,31 @@ def delete_reference(name: str) -> None:
         if candidate.exists():
             candidate.unlink()
             return
+
+
+def parse_reference_tokens(prompt: str) -> list[str]:
+    """Extract names from [bracket] tokens in a prompt string."""
+    return re.findall(r'\[([^\[\]]+)\]', prompt)
+
+
+def resolve_references(names: list[str]) -> tuple[list[bytes], list[str]]:
+    """Resolve reference names to bytes from the reference library.
+
+    Returns (found_bytes, missing_names).
+    """
+    ref_dir = get_references_dir()
+    found: list[bytes] = []
+    missing: list[str] = []
+    for name in names:
+        stem = name.strip().replace(" ", "_")
+        match = None
+        for ext in SUPPORTED_EXTENSIONS:
+            candidate = ref_dir / f"{stem}{ext}"
+            if candidate.exists():
+                match = candidate
+                break
+        if match:
+            found.append(match.read_bytes())
+        else:
+            missing.append(name)
+    return found, missing
