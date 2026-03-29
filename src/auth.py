@@ -5,6 +5,10 @@ Set the following environment variables to enable auth:
   GOOGLE_CLIENT_SECRET   — OAuth 2.0 client secret
   APP_URL                — Public base URL of the deployed app (no trailing slash)
   GOOGLE_ALLOWED_DOMAIN  — (optional) restrict sign-in to one Google Workspace domain
+  GOOGLE_ALLOWED_EMAILS  — (optional) comma-separated list of allowed email addresses
+
+Access is granted when either GOOGLE_ALLOWED_DOMAIN or GOOGLE_ALLOWED_EMAILS matches.
+If neither is set, any Google account can sign in.
 
 If GOOGLE_CLIENT_ID is not set the module is a no-op and all users have open access.
 """
@@ -216,9 +220,23 @@ def require_auth(cookie_manager) -> None:
 
             email: str = id_info.get("email", "")
             allowed_domain = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "").strip()
-            if allowed_domain and not email.lower().endswith(f"@{allowed_domain.lower()}"):
+            allowed_emails = {
+                e.strip().lower()
+                for e in os.environ.get("GOOGLE_ALLOWED_EMAILS", "").split(",")
+                if e.strip()
+            }
+
+            domain_ok = allowed_domain and email.lower().endswith(f"@{allowed_domain.lower()}")
+            email_ok = email.lower() in allowed_emails
+
+            if (allowed_domain or allowed_emails) and not (domain_ok or email_ok):
+                parts = []
+                if allowed_domain:
+                    parts.append(f"**@{allowed_domain}** accounts")
+                if allowed_emails:
+                    parts.append("specific allowed emails")
                 st.error(
-                    f"Access is restricted to **@{allowed_domain}** accounts. "
+                    f"Access is restricted to {' or '.join(parts)}. "
                     f"You signed in as `{email}`."
                 )
                 st.stop()
@@ -265,7 +283,17 @@ def _render_login_page() -> None:
     )
 
     allowed_domain = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "").strip()
-    domain_note = f"Sign in with your **@{allowed_domain}** Google account." if allowed_domain else "Sign in with your Google account."
+    allowed_emails = {
+        e.strip().lower()
+        for e in os.environ.get("GOOGLE_ALLOWED_EMAILS", "").split(",")
+        if e.strip()
+    }
+    if allowed_domain:
+        domain_note = f"Sign in with your **@{allowed_domain}** Google account."
+    elif allowed_emails:
+        domain_note = "Sign in with an authorized Google account."
+    else:
+        domain_note = "Sign in with your Google account."
 
     st.markdown(
         """
