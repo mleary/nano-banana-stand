@@ -66,7 +66,7 @@ with st.sidebar:
     user = get_user()
     if is_configured() and user:
         st.markdown(f"**{user['name']}**  \n`{user['email']}`")
-        if st.button("Sign out", use_container_width=True):
+        if st.button("Sign out", width="stretch"):
             logout(_cookie_manager)
         st.divider()
 
@@ -106,9 +106,6 @@ with st.sidebar:
     current_provider = st.session_state.provider
 
     if current_provider == "google-gemini":
-        extra_settings["aspect_ratio"] = st.selectbox(
-            "Aspect ratio", ["16:9", "1:1", "9:16", "4:3", "3:4"]
-        )
         extra_settings["num_images"] = st.slider("Images to generate", 1, 4, 1)
 
     elif current_provider == "openai":
@@ -136,77 +133,77 @@ tab_generate, tab_history, tab_presets, tab_refs = st.tabs(
 # ============================================================
 
 with tab_generate:
-    st.header("Generate an Image")
+    col_left, col_right = st.columns([3, 2], gap="large")
 
-    base_prompt = st.text_area(
-        "Base prompt",
-        value=st.session_state.rerun_base_prompt,
-        height=120,
-        placeholder="A professional headshot of a data scientist presenting at a conference…",
-        help="Use [name] to inline a saved reference image, e.g. [matt] or [logo].",
-    )
-    st.session_state.rerun_base_prompt = base_prompt
+    with col_left:
+        base_prompt = st.text_area(
+            "Prompt",
+            value=st.session_state.rerun_base_prompt,
+            height=220,
+            placeholder="A professional headshot of a data scientist presenting at a conference…",
+            help="Use [name] to inline a saved reference image, e.g. [matt] or [logo].",
+        )
+        st.session_state.rerun_base_prompt = base_prompt
 
-    # Live feedback for inline [reference] tokens
-    if base_prompt:
-        tokens = parse_reference_tokens(base_prompt)
-        if tokens:
-            ref_stems = {p.stem.lower() for p in ref_store.list_references()}
-            found_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") in ref_stems]
-            missing_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") not in ref_stems]
-            if found_tokens:
-                st.caption(f"Inline references found: {', '.join(found_tokens)}")
-            if missing_tokens:
-                st.caption(f"Unknown references (will be ignored): {', '.join(missing_tokens)}")
+        # Inline [reference] token feedback
+        if base_prompt:
+            tokens = parse_reference_tokens(base_prompt)
+            if tokens:
+                ref_stems = {p.stem.lower() for p in ref_store.list_references()}
+                missing_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") not in ref_stems]
+                if missing_tokens:
+                    st.caption(f"Unknown references (will be ignored): {', '.join(missing_tokens)}")
 
-    presets = preset_store.get_presets()
-    preset_options = ["— none —"] + [p["name"] for p in presets]
-    selected_preset_name = st.selectbox("Style preset", preset_options)
+        enhance = st.checkbox(
+            "Enhance prompt with Gemini",
+            value=False,
+            help="Refines your prompt using Gemini before generation.",
+        )
 
-    style_prompt = ""
-    if selected_preset_name != "— none —":
-        preset = next(p for p in presets if p["name"] == selected_preset_name)
-        style_prompt = preset["style_prompt"]
+        st.write("")
+        generate_btn = st.button("Generate", type="primary", width="stretch")
 
-    enhance = st.checkbox(
-        "Enhance prompt with Gemini before generation",
-        value=False,
-        help="Uses chatlas ChatGoogle to refine your prompt. Requires Google Gemini provider.",
-    )
+    with col_right:
+        presets = preset_store.get_presets()
+        preset_options = ["— none —"] + [p["name"] for p in presets]
+        selected_preset_name = st.selectbox("Style preset", preset_options)
 
-    st.markdown("**Reference image** (optional, Google Gemini only)")
-    saved_refs = ref_store.list_references()
-    ref_options = ["— none —"] + [p.name for p in saved_refs]
-    selected_ref_name = st.selectbox("Saved references", ref_options)
+        style_prompt = ""
+        if selected_preset_name != "— none —":
+            preset = next(p for p in presets if p["name"] == selected_preset_name)
+            style_prompt = preset["style_prompt"]
 
-    reference_file = st.file_uploader(
-        "Or upload a one-off reference",
-        type=["png", "jpg", "jpeg"],
-    )
+        st.write("")
+        saved_refs = ref_store.list_references()
+        ref_options = ["— none —"] + [p.name for p in saved_refs]
+        selected_ref_name = st.selectbox(
+            "Reference image",
+            ref_options,
+            help="Saved references from the References tab. Google Gemini only.",
+        )
 
+        reference_file = st.file_uploader(
+            "Or upload a one-off reference",
+            type=["png", "jpg", "jpeg"],
+        )
+
+        if current_provider == "google-gemini":
+            st.write("")
+            extra_settings["aspect_ratio"] = st.selectbox(
+                "Aspect ratio", ["16:9", "1:1", "9:16", "4:3", "3:4"]
+            )
+
+    # Resolve reference image bytes (no preview shown here)
     reference_image_bytes = None
     if reference_file is not None:
         reference_image_bytes = reference_file.read()
-        st.image(reference_image_bytes, caption="Uploaded reference", width=200)
-        save_ref_name = st.text_input("Save this image to references as (optional)", placeholder="matt_headshot")
-        if save_ref_name and st.button("Save to references"):
-            ext = reference_file.name.rsplit(".", 1)[-1] if "." in reference_file.name else "jpg"
-            try:
-                ref_store.save_reference(save_ref_name, reference_image_bytes, ext)
-                st.success(f"Saved as '{save_ref_name}.{ext}'")
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
     elif selected_ref_name != "— none —":
         ref_path = next(p for p in saved_refs if p.name == selected_ref_name)
         reference_image_bytes = ref_path.read_bytes()
-        st.image(reference_image_bytes, caption=selected_ref_name, width=200)
-
-    generate_btn = st.button("Generate Image", type="primary", use_container_width=True)
 
     if generate_btn:
         if not base_prompt.strip():
-            st.error("Please enter a base prompt.")
+            st.error("Please enter a prompt.")
         elif not api_key_input:
             st.error(f"`{PROVIDERS[current_provider]['api_key_env']}` environment variable is not set.")
         else:
@@ -240,13 +237,11 @@ with tab_generate:
                         settings=result.settings,
                     )
 
-                    st.success(f"Image generated and saved (ID: {gen_id})")
-
                     image_bytes = load_image_bytes(result.output_path)
                     if image_bytes:
                         st.image(image_bytes, caption=result.final_prompt)
                         st.download_button(
-                            "Download image",
+                            "Download",
                             data=image_bytes,
                             file_name=f"generation_{gen_id}.png",
                             mime="image/png",
@@ -419,7 +414,7 @@ with tab_refs:
         cols = st.columns(4)
         for i, ref_path in enumerate(saved_refs):
             with cols[i % 4]:
-                st.image(ref_path.read_bytes(), caption=ref_path.name, use_container_width=True)
+                st.image(ref_path.read_bytes(), caption=ref_path.name, width="stretch")
                 if st.button("Delete", key=f"del_ref_{ref_path.name}"):
                     ref_path.unlink()
                     st.rerun()

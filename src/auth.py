@@ -20,9 +20,6 @@ import time
 from typing import Optional
 
 import streamlit as st
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
-from google_auth_oauthlib.flow import Flow
 
 SCOPES = [
     "openid",
@@ -135,7 +132,8 @@ def _delete_session(token: str) -> None:
 # OAuth flow helpers
 # ---------------------------------------------------------------------------
 
-def _build_flow(redirect_uri: str) -> Flow:
+def _build_flow(redirect_uri: str):
+    from google_auth_oauthlib.flow import Flow
     client_config = {
         "web": {
             "client_id": os.environ["GOOGLE_CLIENT_ID"],
@@ -208,6 +206,8 @@ def require_auth(cookie_manager) -> None:
             return
 
         try:
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token
             flow = _build_flow(_redirect_uri())
             flow.fetch_token(code=code)
             credentials = flow.credentials
