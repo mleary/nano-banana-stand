@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 from pathlib import Path
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+_REFERENCE_NAME_RE = re.compile(r"[^a-z0-9_-]+")
 
 REFERENCES_DIR = Path(__file__).parent.parent / "data" / "references"
 
@@ -27,24 +27,54 @@ def list_references() -> list[Path]:
     )
 
 
+def _normalize_reference_name(name: str) -> str:
+    normalized = name.strip().lower().replace(" ", "_")
+    normalized = _REFERENCE_NAME_RE.sub("_", normalized).strip("_")
+    if not normalized:
+        raise ValueError("Reference names must contain letters or numbers.")
+    return normalized
+
+
+def _normalize_extension(extension: str) -> str:
+    normalized = f".{extension.lstrip('.').lower()}"
+    if normalized not in SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+        raise ValueError(f"Unsupported file type '{extension}'. Use one of: {supported}.")
+    return normalized
+
+
+def _find_reference_path(name: str) -> Path | None:
+    normalized_name = _normalize_reference_name(name)
+    for path in list_references():
+        if _normalize_reference_name(path.stem) == normalized_name:
+            return path
+    return None
+
+
+def reference_exists(name: str) -> bool:
+    try:
+        return _find_reference_path(name) is not None
+    except ValueError:
+        return False
+
+
 def save_reference(name: str, image_bytes: bytes, extension: str = "jpg") -> Path:
     """Save image bytes as a named reference. Raises if name already exists."""
     ref_dir = get_references_dir()
-    stem = name.strip().replace(" ", "_")
-    dest = ref_dir / f"{stem}.{extension.lstrip('.')}"
-    if dest.exists():
-        raise ValueError(f"A reference named '{dest.name}' already exists.")
+    stem = _normalize_reference_name(name)
+    suffix = _normalize_extension(extension)
+    existing = _find_reference_path(name)
+    if existing:
+        raise ValueError(f"A reference named '{existing.name}' already exists.")
+    dest = ref_dir / f"{stem}{suffix}"
     dest.write_bytes(image_bytes)
     return dest
 
 
 def delete_reference(name: str) -> None:
-    ref_dir = get_references_dir()
-    for ext in SUPPORTED_EXTENSIONS:
-        candidate = ref_dir / f"{name}{ext}"
-        if candidate.exists():
-            candidate.unlink()
-            return
+    existing = _find_reference_path(name)
+    if existing:
+        existing.unlink()
 
 
 def parse_reference_tokens(prompt: str) -> list[str]:
@@ -57,17 +87,13 @@ def resolve_references(names: list[str]) -> tuple[list[bytes], list[str]]:
 
     Returns (found_bytes, missing_names).
     """
-    ref_dir = get_references_dir()
     found: list[bytes] = []
     missing: list[str] = []
     for name in names:
-        stem = name.strip().replace(" ", "_")
-        match = None
-        for ext in SUPPORTED_EXTENSIONS:
-            candidate = ref_dir / f"{stem}{ext}"
-            if candidate.exists():
-                match = candidate
-                break
+        try:
+            match = _find_reference_path(name)
+        except ValueError:
+            match = None
         if match:
             found.append(match.read_bytes())
         else:

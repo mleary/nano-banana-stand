@@ -1,7 +1,5 @@
 streamlit>=1.35.0
-chatlas>=0.4.0
 google-genai>=1.0.0
-openai>=1.30.0
 python-dotenv>=1.0.0
 pyyaml>=6.0
 # Google OAuth authentication

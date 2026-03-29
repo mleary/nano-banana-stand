@@ -1,31 +1,32 @@
-"""Streamlit app for reproducible presentation image generation.
-
-Tabs:
-  ✨ Generate  — create images with prompt + style preset
-  📂 History   — browse, search, download, and rerun past generations
-  🎭 Presets   — manage reusable style prompts
-  ⚙️ Settings  — configure provider, API keys, and generation parameters
-"""
-
-import json
+"""Streamlit app for reproducible presentation image generation."""
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import streamlit as st
 from extra_streamlit_components import CookieManager
 
 from src import database as db
-from src import presets as preset_store
-from src import references as ref_store
-from src.auth import get_user, is_configured, logout, require_auth
-from src.generator import PROVIDERS, generate_image, get_provider_api_key
-from src.references import parse_reference_tokens, resolve_references
-from src.storage import load_image_bytes
+from src.auth import require_auth
+from src.generator import PROVIDERS
+from src.ui.generate_tab import render_generate_tab
+from src.ui.history_tab import render_history_tab
+from src.ui.presets_tab import render_presets_tab
+from src.ui.references_tab import render_references_tab
+from src.ui.sidebar import render_sidebar
 
-# ---------------------------------------------------------------------------
-# App setup
-# ---------------------------------------------------------------------------
+
+def _default_session_state(key: str, value) -> None:
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+
+def _init_session_state() -> None:
+    _default_session_state("rerun_base_prompt", "")
+    _default_session_state("provider", "google-gemini")
+    _default_session_state("selected_model", PROVIDERS["google-gemini"]["default_model"])
+
 
 st.set_page_config(
     page_title="AI Image Generator",
@@ -34,383 +35,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Cookie manager must be instantiated early (before require_auth)
 _cookie_manager = CookieManager(key="nano_banana_auth")
-
-# Enforce Google OAuth if configured
 require_auth(_cookie_manager)
-
 db.init_db()
+_init_session_state()
 
-# ---------------------------------------------------------------------------
-# Session state helpers
-# ---------------------------------------------------------------------------
-
-def _default(key, value):
-    if key not in st.session_state:
-        st.session_state[key] = value
-
-
-_default("rerun_base_prompt", "")
-_default("rerun_provider", "google-gemini")
-_default("active_tab", 0)
-
-
-# ---------------------------------------------------------------------------
-# Sidebar — provider & API key quick-config
-# ---------------------------------------------------------------------------
-
-with st.sidebar:
-    # Show signed-in user info when auth is enabled
-    user = get_user()
-    if is_configured() and user:
-        st.markdown(f"**{user['name']}**  \n`{user['email']}`")
-        if st.button("Sign out", width="stretch"):
-            logout(_cookie_manager)
-        st.divider()
-
-    st.header("Provider")
-
-    provider_options = list(PROVIDERS.keys())
-    provider_labels = [PROVIDERS[p]["label"] for p in provider_options]
-
-    # Use session state to allow tab-triggered provider changes
-    _default("provider", "google-gemini")
-    selected_provider_label = st.selectbox(
-        "Image provider",
-        provider_labels,
-        index=provider_options.index(st.session_state.provider),
-        key="sidebar_provider_select",
-    )
-    st.session_state.provider = provider_options[provider_labels.index(selected_provider_label)]
-    provider = st.session_state.provider
-
-    model_options = PROVIDERS[provider]["models"]
-    selected_model = st.selectbox("Model", model_options)
-
-    env_key_var = PROVIDERS[provider]["api_key_env"]
-    api_key_input = get_provider_api_key(provider)
-    if not api_key_input:
-        st.warning(f"`{env_key_var}` not set.")
-
-    st.divider()
-    extra_settings: dict = {}
-    current_provider = st.session_state.provider
-
-    if current_provider == "google-gemini":
-        extra_settings["num_images"] = st.slider("Images to generate", 1, 4, 1)
-
-    elif current_provider == "openai":
-        size_map = {
-            "dall-e-3": ["1792x1024", "1024x1024", "1024x1792"],
-            "dall-e-2": ["256x256", "512x512", "1024x1024"],
-        }
-        extra_settings["size"] = st.selectbox(
-            "Size", size_map.get(selected_model, ["1024x1024"])
-        )
-        if selected_model == "dall-e-3":
-            extra_settings["quality"] = st.selectbox("Quality", ["standard", "hd"])
-            extra_settings["style"] = st.selectbox("Style", ["vivid", "natural"])
-
-# ---------------------------------------------------------------------------
-# Tabs
-# ---------------------------------------------------------------------------
+sidebar_config = render_sidebar(_cookie_manager)
 
 tab_generate, tab_history, tab_presets, tab_refs = st.tabs(
     ["✨ Generate", "📂 History", "🎭 Presets", "🖼️ References"]
 )
 
-# ============================================================
-# TAB 1 — Generate
-# ============================================================
-
 with tab_generate:
-    col_left, col_right = st.columns([3, 2], gap="large")
-
-    with col_left:
-        base_prompt = st.text_area(
-            "Prompt",
-            value=st.session_state.rerun_base_prompt,
-            height=220,
-            placeholder="A professional headshot of a data scientist presenting at a conference…",
-            help="Use [name] to inline a saved reference image, e.g. [matt] or [logo].",
-        )
-        st.session_state.rerun_base_prompt = base_prompt
-
-        # Inline [reference] token feedback
-        if base_prompt:
-            tokens = parse_reference_tokens(base_prompt)
-            if tokens:
-                ref_stems = {p.stem.lower() for p in ref_store.list_references()}
-                missing_tokens = [t for t in tokens if t.strip().lower().replace(" ", "_") not in ref_stems]
-                if missing_tokens:
-                    st.caption(f"Unknown references (will be ignored): {', '.join(missing_tokens)}")
-
-        enhance = False
-        if current_provider == "google-gemini":
-            enhance = st.checkbox(
-                "Enhance prompt with Gemini",
-                value=False,
-                help="Refines your prompt using Gemini before generation.",
-            )
-
-        generate_btn = st.button("Generate", type="primary", width="stretch")
-
-        with st.expander("Add metadata (optional)"):
-            title = st.text_input("Title", placeholder="Q1 Roadmap hero image")
-            project_name = st.text_input("Project / deck", placeholder="Q1 2025 All-Hands")
-            tags = st.text_input("Tags (comma-separated)", placeholder="roadmap, blue, wide")
-
-    with col_right:
-        presets = preset_store.get_presets()
-        preset_options = ["— none —"] + [p["name"] for p in presets]
-        selected_preset_name = st.selectbox("Style preset", preset_options)
-
-        style_prompt = ""
-        if selected_preset_name != "— none —":
-            preset = next(p for p in presets if p["name"] == selected_preset_name)
-            style_prompt = preset["style_prompt"]
-            st.caption(style_prompt)
-
-        st.divider()
-        saved_refs = ref_store.list_references()
-        ref_mode = st.radio(
-            "Reference image",
-            ["None", "From library", "Upload"],
-            horizontal=True,
-            help="Google Gemini only.",
-        )
-
-        reference_image_bytes = None
-        if ref_mode == "From library":
-            ref_options = [p.name for p in saved_refs]
-            if ref_options:
-                selected_ref_name = st.selectbox("Saved reference", ref_options)
-                ref_path = next(p for p in saved_refs if p.name == selected_ref_name)
-                reference_image_bytes = ref_path.read_bytes()
-            else:
-                st.caption("No saved references yet — add some in the References tab.")
-        elif ref_mode == "Upload":
-            reference_file = st.file_uploader("Image file", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
-            if reference_file is not None:
-                reference_image_bytes = reference_file.read()
-
-        if current_provider == "google-gemini":
-            st.divider()
-            extra_settings["aspect_ratio"] = st.selectbox(
-                "Aspect ratio", ["16:9", "1:1", "9:16", "4:3", "3:4"]
-            )
-
-    if generate_btn:
-        if not base_prompt.strip():
-            st.error("Please enter a prompt.")
-        elif not api_key_input:
-            st.error(f"`{PROVIDERS[current_provider]['api_key_env']}` environment variable is not set.")
-        else:
-            inline_ref_bytes, missing_refs = resolve_references(parse_reference_tokens(base_prompt))
-            if missing_refs:
-                st.warning(f"Reference(s) not found in library: {', '.join(missing_refs)}")
-            with st.spinner("Generating…"):
-                try:
-                    result = generate_image(
-                        base_prompt=base_prompt,
-                        style_prompt=style_prompt,
-                        provider=current_provider,
-                        model=selected_model,
-                        api_key=api_key_input,
-                        settings=extra_settings,
-                        enhance_prompt=enhance,
-                        reference_image=reference_image_bytes,
-                        reference_images=inline_ref_bytes or None,
-                    )
-
-                    gen_id = db.save_generation(
-                        base_prompt=base_prompt,
-                        final_prompt=result.final_prompt,
-                        provider=result.provider,
-                        output_path=result.output_path,
-                        title=title or None,
-                        project_name=project_name or None,
-                        tags=tags or None,
-                        style_prompt=style_prompt or None,
-                        model=result.model,
-                        settings=result.settings,
-                    )
-
-                    image_bytes = load_image_bytes(result.output_path)
-                    if image_bytes:
-                        st.image(image_bytes, caption=result.final_prompt)
-                        st.download_button(
-                            "Download",
-                            data=image_bytes,
-                            file_name=f"generation_{gen_id}.png",
-                            mime="image/png",
-                        )
-
-                    with st.expander("Generation details"):
-                        st.json({
-                            "id": gen_id,
-                            "provider": result.provider,
-                            "model": result.model,
-                            "final_prompt": result.final_prompt,
-                            "settings": result.settings,
-                            "output_path": result.output_path,
-                        })
-
-                except Exception as exc:
-                    st.error(f"Generation failed: {exc}")
-
-
-# ============================================================
-# TAB 2 — History
-# ============================================================
+    render_generate_tab(sidebar_config)
 
 with tab_history:
-    st.header("Generation History")
-
-    col_filter1, col_filter2 = st.columns(2)
-    with col_filter1:
-        projects = ["All projects"] + db.get_projects()
-        selected_project = st.selectbox("Filter by project", projects)
-    with col_filter2:
-        search_query = st.text_input("Search prompts / titles / tags", placeholder="roadmap…")
-
-    project_filter = None if selected_project == "All projects" else selected_project
-    generations = db.get_generations(project_name=project_filter, search=search_query)
-
-    if not generations:
-        st.info("No generations yet. Head to ✨ Generate to create your first image.")
-    else:
-        st.caption(f"{len(generations)} generation(s) found.")
-        for gen in generations:
-            label = gen.get("title") or f"Generation #{gen['id']}"
-            with st.expander(f"**{label}** — {gen['created_at'][:19]} | {gen['provider']}"):
-                c_img, c_detail = st.columns([2, 3])
-                with c_img:
-                    image_bytes = load_image_bytes(gen["output_path"] or "")
-                    if image_bytes:
-                        st.image(image_bytes)
-                        st.download_button(
-                            "Download",
-                            data=image_bytes,
-                            file_name=f"gen_{gen['id']}.png",
-                            mime="image/png",
-                            key=f"dl_{gen['id']}",
-                        )
-                    else:
-                        st.warning("Image file not found.")
-
-                with c_detail:
-                    st.markdown(f"**Base prompt:** {gen['base_prompt']}")
-                    if gen.get("style_prompt"):
-                        st.markdown(f"**Style prompt:** {gen['style_prompt']}")
-                    if gen.get("final_prompt") != gen.get("base_prompt"):
-                        st.markdown(f"**Final prompt:** {gen['final_prompt']}")
-                    st.markdown(f"**Provider:** `{gen['provider']}` / `{gen.get('model', '')}`")
-                    if gen.get("project_name"):
-                        st.markdown(f"**Project:** {gen['project_name']}")
-                    if gen.get("tags"):
-                        st.markdown(f"**Tags:** {gen['tags']}")
-                    if gen.get("settings"):
-                        try:
-                            settings_dict = json.loads(gen["settings"])
-                            if settings_dict:
-                                st.json(settings_dict)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-                    if st.button("Rerun / duplicate", key=f"rerun_{gen['id']}"):
-                        st.session_state.rerun_base_prompt = gen["base_prompt"]
-                        st.session_state.provider = gen["provider"]
-                        st.rerun()
-
-
-# ============================================================
-# TAB 3 — Presets
-# ============================================================
+    render_history_tab()
 
 with tab_presets:
-    st.header("Style Presets")
-
-    with st.form("new_preset_form"):
-        st.subheader("Create a new preset")
-        preset_name = st.text_input("Preset name", placeholder="Clean Corporate")
-        preset_desc = st.text_input("Description (optional)", placeholder="White background, professional look")
-        preset_style = st.text_area(
-            "Style prompt",
-            height=80,
-            placeholder="Clean corporate style, white background, 4k resolution, professional lighting, photorealistic",
-        )
-        submitted = st.form_submit_button("Save preset")
-        if submitted:
-            if not preset_name.strip():
-                st.error("Preset name is required.")
-            elif not preset_style.strip():
-                st.error("Style prompt is required.")
-            else:
-                try:
-                    preset_store.save_preset(
-                        name=preset_name.strip(),
-                        style_prompt=preset_style.strip(),
-                        description=preset_desc.strip(),
-                    )
-                    st.success(f"Preset '{preset_name}' saved.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Could not save preset: {exc}")
-
-    st.divider()
-    st.subheader("Existing presets")
-
-    presets = preset_store.get_presets()
-    if not presets:
-        st.info("No presets yet.")
-    else:
-        for preset in presets:
-            with st.expander(f"**{preset['name']}**"):
-                if preset.get("description"):
-                    st.markdown(f"*{preset['description']}*")
-                st.code(preset["style_prompt"])
-                if st.button("Delete preset", key=f"del_preset_{preset['name']}"):
-                    preset_store.delete_preset(preset["name"])
-                    st.rerun()
-
-
-# ============================================================
-# TAB 4 — References
-# ============================================================
+    render_presets_tab()
 
 with tab_refs:
-    st.header("Reference Images")
-
-    with st.form("upload_ref_form"):
-        st.subheader("Add a reference image")
-        ref_upload = st.file_uploader("Image file", type=["png", "jpg", "jpeg"])
-        ref_save_name = st.text_input("Name", placeholder="matt_headshot")
-        save_submitted = st.form_submit_button("Save")
-        if save_submitted:
-            if not ref_upload:
-                st.error("Please choose a file.")
-            elif not ref_save_name.strip():
-                st.error("Name is required.")
-            else:
-                ext = ref_upload.name.rsplit(".", 1)[-1] if "." in ref_upload.name else "jpg"
-                try:
-                    ref_store.save_reference(ref_save_name.strip(), ref_upload.read(), ext)
-                    st.success(f"Saved '{ref_save_name}.{ext}'")
-                    st.rerun()
-                except ValueError as e:
-                    st.error(str(e))
-
-    st.divider()
-    saved_refs = ref_store.list_references()
-    if not saved_refs:
-        st.info("No saved references yet.")
-    else:
-        cols = st.columns(4)
-        for i, ref_path in enumerate(saved_refs):
-            with cols[i % 4]:
-                st.image(ref_path.read_bytes(), caption=ref_path.name, width="stretch")
-                if st.button("Delete", key=f"del_ref_{ref_path.name}"):
-                    ref_path.unlink()
-                    st.rerun()
+    render_references_tab()

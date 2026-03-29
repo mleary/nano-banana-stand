@@ -17,6 +17,7 @@ import os
 import secrets
 import sqlite3
 import time
+from pathlib import Path
 from typing import Optional
 
 import streamlit as st
@@ -36,14 +37,14 @@ _STATE_TTL = 900                # 15 minutes
 # Database helpers (reuse the app's SQLite database)
 # ---------------------------------------------------------------------------
 
-def _db_path() -> str:
-    return os.environ.get("DB_PATH", "data/db.sqlite3")
+def _db_path() -> Path:
+    return Path(os.environ.get("DB_PATH", "data/db.sqlite3"))
 
 
 def _init_auth_tables() -> None:
     path = _db_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    conn = sqlite3.connect(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
     conn.execute("""
         CREATE TABLE IF NOT EXISTS oauth_states (
             state      TEXT    PRIMARY KEY,
@@ -64,7 +65,7 @@ def _init_auth_tables() -> None:
 
 
 def _store_state(state: str) -> None:
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(str(_db_path()))
     conn.execute(
         "INSERT OR REPLACE INTO oauth_states (state, created_at) VALUES (?, ?)",
         (state, int(time.time())),
@@ -79,7 +80,7 @@ def _store_state(state: str) -> None:
 
 def _consume_state(state: str) -> bool:
     """Return True and delete the state if it is valid, else False."""
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(str(_db_path()))
     row = conn.execute(
         "SELECT state FROM oauth_states WHERE state = ? AND created_at > ?",
         (state, int(time.time()) - _STATE_TTL),
@@ -93,7 +94,7 @@ def _consume_state(state: str) -> bool:
 
 def _create_session(email: str, name: str, picture: str) -> str:
     token = secrets.token_urlsafe(32)
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(str(_db_path()))
     conn.execute(
         "INSERT INTO auth_sessions (token, email, name, picture, created_at) VALUES (?, ?, ?, ?, ?)",
         (token, email, name, picture or "", int(time.time())),
@@ -110,7 +111,7 @@ def _create_session(email: str, name: str, picture: str) -> str:
 def _lookup_session(token: str) -> Optional[dict]:
     if not token:
         return None
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(str(_db_path()))
     row = conn.execute(
         "SELECT email, name, picture FROM auth_sessions WHERE token = ? AND created_at > ?",
         (token, int(time.time()) - _SESSION_TTL),
@@ -122,7 +123,7 @@ def _lookup_session(token: str) -> Optional[dict]:
 
 
 def _delete_session(token: str) -> None:
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(str(_db_path()))
     conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
     conn.commit()
     conn.close()

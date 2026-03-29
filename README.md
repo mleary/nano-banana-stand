@@ -1,17 +1,15 @@
 # AI Image Generator
 
-Streamlit app for reproducible presentation image generation. Prompts, style settings, and generated images are stored together so every run can be reproduced or iterated on. 
+Streamlit app for reproducible presentation image generation. Prompts, provider settings, and generated images are stored together so runs can be reviewed, reused, and iterated on.
 
 Inspired by [hadley/bananarama](https://github.com/hadley/bananarama).
 
 ## Features
 
-- **Multi-provider image generation** — Google Gemini (Imagen 4), OpenAI DALL-E 3
-- **Reference image support** — upload a photo or pick from a saved library to guide generation (Gemini only)
+- **Google Gemini image generation** — primary path for standard and reference-guided images
+- **Reference image support** — upload a photo, pick from a saved library, or inline `[name]` tokens in prompts (Gemini only)
 - **Style presets** — save and reuse style prompts stored in `presets.yaml`
-- **Prompt enhancement** — optional Gemini-powered prompt refinement via [chatlas](https://github.com/posit-dev/chatlas)
-- **Full reproducibility** — every generation stores prompt, style, provider, model, settings, and timestamp
-- **Generation history** — browse, search, download, and rerun past generations
+- **Generation history** — browse, search, download, and quickly reuse prior prompts
 
 ## Examples
 
@@ -78,12 +76,30 @@ cp .env.example .env  # fill in your API keys
 streamlit run app.py
 ```
 
+Run tests with:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## Project layout
+
+- `app.py` — thin Streamlit shell: page setup, auth, session defaults, sidebar, and tab composition
+- `src/ui/` — one module per UI surface (`generate_tab`, `history_tab`, `presets_tab`, `references_tab`, `sidebar`)
+- `src/services/` — app-level orchestration such as generate → persist → load
+- `src/generator.py` — provider-specific image generation
+- `src/database.py` — SQLite persistence
+- `src/storage.py` — file storage for generated images
+- `src/presets.py` — YAML-backed preset management
+- `src/references.py` — saved reference image library
+- `src/auth.py` — optional Google OAuth flow
+
 ## Provider setup
 
 | Provider | Env var | Notes |
 |---|---|---|
-| `google-gemini` | `GOOGLE_API_KEY` | Default. Uses Imagen 4 for generation; `gemini-2.5-flash-image` for reference-guided generation |
-| `openai` | `OPENAI_API_KEY` | DALL-E 3 / DALL-E 2 |
+| `google-gemini` | `GOOGLE_API_KEY` | Default. Uses Imagen for standard generations and `gemini-2.5-flash-image` when reference images are supplied |
+| `openai` | `OPENAI_API_KEY` | Optional placeholder. Install `openai` separately if you decide to use it later |
 
 ## Style presets
 
@@ -92,6 +108,8 @@ Presets are stored in `presets.yaml` at the project root — edit it directly in
 ## Reference images
 
 Upload a one-off reference image in the Generate tab, or save permanent references via the **References** tab. Permanent references are stored in `data/references/` (gitignored).
+
+Reference names are normalized to lowercase slugs. Use letters, numbers, `_`, or `-` if you want predictable prompt tokens such as `[team_logo]`.
 
 ## Persistence
 
@@ -114,4 +132,3 @@ Stores generation history only. Path overridden by `DB_PATH` env var.
 | settings | TEXT | JSON blob of provider-specific settings |
 | output_path | TEXT | Local path to saved image file |
 | created_at | TEXT | ISO-8601 UTC timestamp |
-

@@ -84,7 +84,7 @@ In the Railway service → **Variables** tab, add the following:
 | Variable | Value | Required |
 |---|---|---|
 | `GOOGLE_API_KEY` | Your Google Gemini API key | For image generation |
-| `OPENAI_API_KEY` | Your OpenAI key | If using DALL-E |
+| `OPENAI_API_KEY` | Your OpenAI key | Optional placeholder if you later enable DALL-E |
 | `GOOGLE_CLIENT_ID` | OAuth Client ID from step 1.4 | For auth |
 | `GOOGLE_CLIENT_SECRET` | OAuth Client Secret from step 1.4 | For auth |
 | `APP_URL` | `https://your-app.railway.app` | For auth — **no trailing slash** |
