@@ -14,10 +14,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
+from extra_streamlit_components import CookieManager
 
 from src import database as db
 from src import presets as preset_store
 from src import references as ref_store
+from src.auth import get_user, is_configured, logout, require_auth
 from src.generator import PROVIDERS, generate_image, get_provider_api_key
 from src.references import parse_reference_tokens, resolve_references
 from src.storage import load_image_bytes
@@ -32,6 +34,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Cookie manager must be instantiated early (before require_auth)
+_cookie_manager = CookieManager(key="nano_banana_auth")
+
+# Enforce Google OAuth if configured
+require_auth(_cookie_manager)
 
 db.init_db()
 
@@ -54,6 +62,14 @@ _default("active_tab", 0)
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
+    # Show signed-in user info when auth is enabled
+    user = get_user()
+    if is_configured() and user:
+        st.markdown(f"**{user['name']}**  \n`{user['email']}`")
+        if st.button("Sign out", use_container_width=True):
+            logout(_cookie_manager)
+        st.divider()
+
     st.header("Provider")
 
     provider_options = list(PROVIDERS.keys())
