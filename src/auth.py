@@ -201,11 +201,16 @@ def require_auth(cookie_manager) -> None:
         code = params.get("code", "")
         state = params.get("state", "")
 
+        # Guard against Streamlit double-rerun consuming the state twice.
+        if st.session_state.get("_auth_callback_state") == state:
+            st.stop()
+
         if not _consume_state(state):
             st.error("Authentication state is invalid or expired. Please try signing in again.")
             _render_login_page()
             return
 
+        st.session_state["_auth_callback_state"] = state
         try:
             from google.auth.transport import requests as google_requests
             from google.oauth2 import id_token
