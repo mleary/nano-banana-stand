@@ -201,6 +201,10 @@ def require_auth(cookie_manager) -> None:
         code = params.get("code", "")
         state = params.get("state", "")
 
+        # Clear params immediately so CookieManager-triggered reruns don't
+        # re-enter this branch and fail on the already-consumed state.
+        st.query_params.clear()
+
         if not _consume_state(state):
             st.error("Authentication state is invalid or expired. Please try signing in again.")
             _render_login_page()
@@ -250,13 +254,11 @@ def require_auth(cookie_manager) -> None:
             token = _create_session(user["email"], user["name"], user["picture"])
             cookie_manager.set(_COOKIE_NAME, token, max_age=_SESSION_TTL)
             st.session_state["_auth_user"] = user
-            st.query_params.clear()
             st.rerun()
             return
 
         except Exception as exc:
-            import traceback
-            st.error(f"Authentication failed: {exc}\n\n```\n{traceback.format_exc()}\n```")
+            st.error(f"Authentication failed: {exc}")
             _render_login_page()
             return
 
