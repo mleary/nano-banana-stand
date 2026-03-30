@@ -47,10 +47,15 @@ def _init_auth_tables() -> None:
     conn = sqlite3.connect(str(path))
     conn.execute("""
         CREATE TABLE IF NOT EXISTS oauth_states (
-            state      TEXT    PRIMARY KEY,
-            created_at INTEGER NOT NULL
+            state         TEXT    PRIMARY KEY,
+            created_at    INTEGER NOT NULL,
+            code_verifier TEXT
         )
     """)
+    # Migrate existing table if code_verifier column is missing
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(oauth_states)")}
+    if "code_verifier" not in cols:
+        conn.execute("ALTER TABLE oauth_states ADD COLUMN code_verifier TEXT")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS auth_sessions (
             token      TEXT    PRIMARY KEY,
@@ -64,11 +69,11 @@ def _init_auth_tables() -> None:
     conn.close()
 
 
-def _store_state(state: str) -> None:
+def _store_state(state: str, code_verifier: str) -> None:
     conn = sqlite3.connect(str(_db_path()))
     conn.execute(
-        "INSERT OR REPLACE INTO oauth_states (state, created_at) VALUES (?, ?)",
-        (state, int(time.time())),
+        "INSERT OR REPLACE INTO oauth_states (state, created_at, code_verifier) VALUES (?, ?, ?)",
+        (state, int(time.time()), code_verifier),
     )
     conn.execute(
         "DELETE FROM oauth_states WHERE created_at < ?",
@@ -78,18 +83,18 @@ def _store_state(state: str) -> None:
     conn.close()
 
 
-def _consume_state(state: str) -> bool:
-    """Return True and delete the state if it is valid, else False."""
+def _consume_state(state: str) -> Optional[str]:
+    """Return the code_verifier and delete the state if valid, else return None."""
     conn = sqlite3.connect(str(_db_path()))
     row = conn.execute(
-        "SELECT state FROM oauth_states WHERE state = ? AND created_at > ?",
+        "SELECT code_verifier FROM oauth_states WHERE state = ? AND created_at > ?",
         (state, int(time.time()) - _STATE_TTL),
     ).fetchone()
     if row:
         conn.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
         conn.commit()
     conn.close()
-    return row is not None
+    return row[0] if row else None
 
 
 def _create_session(email: str, name: str, picture: str) -> str:
@@ -205,25 +210,17 @@ def require_auth(cookie_manager) -> None:
         # re-enter this branch and fail on the already-consumed state.
         st.query_params.clear()
 
-        if not _consume_state(state):
-            conn = sqlite3.connect(str(_db_path()))
-            rows = conn.execute("SELECT state, created_at FROM oauth_states").fetchall()
-            conn.close()
-            st.error(
-                f"Authentication state is invalid or expired. "
-                f"DB path: `{_db_path()}` | "
-                f"Stored states: {len(rows)} | "
-                f"Received state prefix: `{state[:8]}...`"
-            )
+        code_verifier = _consume_state(state)
+        if code_verifier is None:
+            st.error("Authentication state is invalid or expired. Please try signing in again.")
             _render_login_page()
             return
 
-        st.session_state["_auth_callback_state"] = state
         try:
             from google.auth.transport import requests as google_requests
             from google.oauth2 import id_token
             flow = _build_flow(_redirect_uri())
-            flow.fetch_token(code=code)
+            flow.fetch_token(code=code, code_verifier=code_verifier)
             credentials = flow.credentials
 
             id_info = id_token.verify_oauth2_token(
@@ -287,8 +284,15 @@ def require_auth(cookie_manager) -> None:
 
 
 def _render_login_page() -> None:
+    import base64
+    import hashlib
+
     state = secrets.token_urlsafe(32)
-    _store_state(state)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    _store_state(state, code_verifier)
 
     flow = _build_flow(_redirect_uri())
     auth_url, _ = flow.authorization_url(
@@ -296,6 +300,8 @@ def _render_login_page() -> None:
         include_granted_scopes="true",
         state=state,
         prompt="select_account",
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
 
     allowed_domain = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "").strip()
