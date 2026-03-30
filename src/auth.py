@@ -268,7 +268,9 @@ def require_auth(cookie_manager) -> None:
 
         except Exception as exc:
             import traceback
-            st.error(f"Authentication failed: {exc}\n\n```\n{traceback.format_exc()}\n```")
+            tb = traceback.format_exc()
+            print(f"[AUTH ERROR] {exc}\n{tb}", flush=True)
+            st.error(f"Authentication failed: {exc}\n\n```\n{tb}\n```")
             _render_login_page()
             return
 
