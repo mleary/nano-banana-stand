@@ -291,7 +291,8 @@ def _render_login_page() -> None:
     ).rstrip(b"=").decode()
     _store_state(state, code_verifier)
 
-    flow = _build_flow(_redirect_uri())
+    redirect = _redirect_uri()
+    flow = _build_flow(redirect)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         state=state,
@@ -299,6 +300,8 @@ def _render_login_page() -> None:
         code_challenge=code_challenge,
         code_challenge_method="S256",
     )
+    print(f"[AUTH DEBUG] client_id={os.environ.get('GOOGLE_CLIENT_ID', '')[:20]}... redirect_uri={redirect}", flush=True)
+    print(f"[AUTH DEBUG] auth_url={auth_url}", flush=True)
 
     allowed_domain = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "").strip()
     allowed_emails = {
