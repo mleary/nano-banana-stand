@@ -294,7 +294,6 @@ def _render_login_page() -> None:
     flow = _build_flow(_redirect_uri())
     auth_url, _ = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         state=state,
         prompt="select_account",
         code_challenge=code_challenge,
