@@ -314,7 +314,7 @@ def _render_login_page() -> None:
     elif allowed_emails:
         domain_note = "Sign in with an authorized Google account."
     else:
-        domain_note = "Sign in with your Google account."
+        domain_note = ""
 
     st.markdown(
         """
@@ -332,17 +332,10 @@ def _render_login_page() -> None:
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image("img/banana-logo.png", use_container_width=True)
-
     st.markdown(
-        "<h1 style='text-align: center; margin-bottom: 0;'>The Banana Stand</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
+        "<h1 style='text-align: center; margin-bottom: 0;'>The Banana Stand</h1>"
         "<p class='login-tagline' style='text-align: center;'>"
-        "There's always images in the banana stand."
+        "There are always images in the banana stand."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -352,9 +345,9 @@ def _render_login_page() -> None:
         st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
         st.caption(domain_note)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col_a, col_b, col_c = st.columns([1, 2, 1])
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.image("img/banana-logo.png", use_container_width=True)
     with col_b:
         st.image("img/banana-painter.png", use_container_width=True)
 
