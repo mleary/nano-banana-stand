@@ -48,11 +48,58 @@ def render_presets_tab() -> None:
         st.info("No presets yet.")
         return
 
+    editing_key = "editing_preset"
+    if editing_key not in st.session_state:
+        st.session_state[editing_key] = None
+
     for preset in presets:
         with st.expander(f"**{preset['name']}**"):
-            if preset.get("description"):
-                st.markdown(f"*{preset['description']}*")
-            st.code(preset["style_prompt"])
-            if st.button("Delete preset", key=f"del_preset_{preset['name']}"):
-                preset_store.delete_preset(preset["name"])
-                st.rerun()
+            if st.session_state[editing_key] == preset["name"]:
+                # Edit form
+                with st.form(key=f"edit_preset_form_{preset['name']}"):
+                    new_description = st.text_input(
+                        "Description",
+                        value=preset.get("description", ""),
+                    )
+                    new_style = st.text_area(
+                        "Style prompt",
+                        value=preset["style_prompt"],
+                        height=80,
+                    )
+                    save_col, cancel_col = st.columns([1, 1])
+                    with save_col:
+                        save_clicked = st.form_submit_button("Save changes")
+                    with cancel_col:
+                        cancel_clicked = st.form_submit_button("Cancel")
+
+                if save_clicked:
+                    if not new_style.strip():
+                        st.error("Style prompt is required.")
+                    else:
+                        try:
+                            preset_store.update_preset(
+                                name=preset["name"],
+                                style_prompt=new_style.strip(),
+                                description=new_description.strip(),
+                            )
+                            st.session_state[editing_key] = None
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Could not update preset: {exc}")
+                elif cancel_clicked:
+                    st.session_state[editing_key] = None
+                    st.rerun()
+            else:
+                # Read view
+                if preset.get("description"):
+                    st.markdown(f"*{preset['description']}*")
+                st.code(preset["style_prompt"])
+                btn_col1, btn_col2 = st.columns([1, 1])
+                with btn_col1:
+                    if st.button("Edit preset", key=f"edit_preset_{preset['name']}"):
+                        st.session_state[editing_key] = preset["name"]
+                        st.rerun()
+                with btn_col2:
+                    if st.button("Delete preset", key=f"del_preset_{preset['name']}"):
+                        preset_store.delete_preset(preset["name"])
+                        st.rerun()

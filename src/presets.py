@@ -46,6 +46,21 @@ def save_preset(name: str, style_prompt: str, description: str = "") -> None:
     _write_presets(path, presets)
 
 
+def update_preset(name: str, style_prompt: str, description: str = "") -> None:
+    path = _presets_path()
+    if not path.exists():
+        raise ValueError(f"No preset named '{name}' found.")
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    presets = data.get("presets", [])
+    for p in presets:
+        if p["name"] == name:
+            p["style_prompt"] = style_prompt
+            p["description"] = description or ""
+            _write_presets(path, presets)
+            return
+    raise ValueError(f"No preset named '{name}' found.")
+
+
 def delete_preset(name: str) -> None:
     path = _presets_path()
     if not path.exists():
