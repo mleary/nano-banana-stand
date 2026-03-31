@@ -212,8 +212,7 @@ def require_auth(cookie_manager) -> None:
 
         code_verifier = _consume_state(state)
         if code_verifier is None:
-            st.error("Authentication state is invalid or expired. Please try signing in again.")
-            _render_login_page()
+            _render_error_page("Authentication state is invalid or expired.")
             return
 
         try:
@@ -246,11 +245,11 @@ def require_auth(cookie_manager) -> None:
                     parts.append(f"**@{allowed_domain}** accounts")
                 if allowed_emails:
                     parts.append("specific allowed emails")
-                st.error(
+                _render_error_page(
                     f"Access is restricted to {' or '.join(parts)}. "
                     f"You signed in as `{email}`."
                 )
-                st.stop()
+                return
 
             user = {
                 "email": email,
@@ -264,8 +263,7 @@ def require_auth(cookie_manager) -> None:
             return
 
         except Exception as exc:
-            st.error(f"Authentication failed: {exc}")
-            _render_login_page()
+            _render_error_page(f"Authentication failed: {exc}")
             return
 
     # 3. Check for existing session cookie
@@ -278,6 +276,24 @@ def require_auth(cookie_manager) -> None:
 
     # 4. Show sign-in page
     _render_login_page()
+
+
+def _render_error_page(message: str) -> None:
+    st.markdown(
+        """
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        .block-container {max-width: 520px; padding-top: 2rem;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.image("img/access-denied.png", use_container_width=True)
+    st.error(message)
+    st.link_button("Back to home", _redirect_uri(), use_container_width=True, type="primary")
+    st.stop()
 
 
 def _render_login_page() -> None:
@@ -314,20 +330,41 @@ def _render_login_page() -> None:
     elif allowed_emails:
         domain_note = "Sign in with an authorized Google account."
     else:
-        domain_note = "Sign in with your Google account."
+        domain_note = ""
 
     st.markdown(
         """
         <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        .block-container {max-width: 480px; padding-top: 4rem;}
+        .block-container {max-width: 520px; padding-top: 2rem;}
+        .login-tagline {
+            font-size: 1.25rem;
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.title("AI Image Generator")
-    st.markdown("---")
-    st.markdown(domain_note)
-    st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
+
+    st.markdown(
+        "<h1 style='text-align: center; margin-bottom: 0;'>The Banana Stand</h1>"
+        "<p class='login-tagline' style='text-align: center;'>"
+        "There are always images in the banana stand."
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
+        st.caption(domain_note)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.image("img/banana-logo.png", use_container_width=True)
+    with col_b:
+        st.image("img/banana-painter.png", use_container_width=True)
+
     st.stop()
