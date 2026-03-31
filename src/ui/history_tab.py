@@ -10,6 +10,8 @@ from src import database as db
 from src.generator import PROVIDERS
 from src.storage import load_image_bytes
 
+_PROMPT_PREVIEW_LEN = 40
+
 
 def _reuse_generation_inputs(generation: dict) -> None:
     st.session_state.rerun_base_prompt = generation["base_prompt"]
@@ -42,7 +44,9 @@ def render_history_tab() -> None:
     st.caption(f"{len(generations)} generation(s) found.")
     for generation in generations:
         label = generation.get("title") or f"Generation #{generation['id']}"
-        with st.expander(f"**{label}** — {generation['created_at'][:19]} | {generation['provider']}"):
+        raw_prompt = generation.get("base_prompt") or ""
+        prompt_preview = raw_prompt[:_PROMPT_PREVIEW_LEN] + ("…" if len(raw_prompt) > _PROMPT_PREVIEW_LEN else "")
+        with st.expander(f"**{label}** — {generation['created_at'][:19]} | {generation['provider']} | {prompt_preview}"):
             c_img, c_detail = st.columns([2, 3])
             with c_img:
                 image_bytes = load_image_bytes(generation["output_path"] or "")
@@ -77,5 +81,11 @@ def render_history_tab() -> None:
                     except (json.JSONDecodeError, TypeError):
                         pass
 
-                if st.button("Reuse prompt", key=f"rerun_{generation['id']}"):
-                    _reuse_generation_inputs(generation)
+                btn_col1, btn_col2 = st.columns([1, 1])
+                with btn_col1:
+                    if st.button("Reuse prompt", key=f"rerun_{generation['id']}"):
+                        _reuse_generation_inputs(generation)
+                with btn_col2:
+                    if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary"):
+                        db.delete_generation(generation["id"])
+                        st.rerun()

@@ -107,6 +107,13 @@ def get_generation(gen_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def delete_generation(gen_id: int) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM generations WHERE id = ?", (gen_id,))
+    conn.commit()
+    conn.close()
+
+
 def get_projects() -> list[str]:
     conn = get_connection()
     rows = conn.execute(

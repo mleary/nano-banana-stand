@@ -29,6 +29,19 @@ class PresetStoreTests(unittest.TestCase):
             presets.get_presets(),
         )
 
+    def test_update_preset_changes_style_and_description(self):
+        presets.save_preset("Clean", "Minimal product shot", description="Old desc")
+        presets.update_preset("Clean", "New style prompt", description="New desc")
+
+        updated = next(p for p in presets.get_presets() if p["name"] == "Clean")
+        self.assertEqual(updated["style_prompt"], "New style prompt")
+        self.assertEqual(updated["description"], "New desc")
+
+    def test_update_preset_raises_for_missing_preset(self):
+        presets.save_preset("Clean", "Minimal product shot")
+        with self.assertRaises(ValueError):
+            presets.update_preset("NonExistent", "style")
+
 
 if __name__ == "__main__":
     unittest.main()
