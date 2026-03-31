@@ -321,13 +321,41 @@ def _render_login_page() -> None:
         <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        .block-container {max-width: 480px; padding-top: 4rem;}
+        .block-container {max-width: 520px; padding-top: 2rem;}
+        .login-tagline {
+            font-size: 1.25rem;
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.title("AI Image Generator")
-    st.markdown("---")
-    st.markdown(domain_note)
-    st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image("img/banana-logo.png", use_container_width=True)
+
+    st.markdown(
+        "<h1 style='text-align: center; margin-bottom: 0;'>The Banana Stand</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p class='login-tagline' style='text-align: center;'>"
+        "There's always images in the banana stand."
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
+        st.caption(domain_note)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_a, col_b, col_c = st.columns([1, 2, 1])
+    with col_b:
+        st.image("img/banana-painter.png", use_container_width=True)
+
     st.stop()
