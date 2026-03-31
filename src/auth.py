@@ -199,6 +199,11 @@ def require_auth(cookie_manager) -> None:
     if "_auth_user" in st.session_state:
         return
 
+    # 1b. Sticky auth error — stay on the error page across reruns
+    if "_auth_error" in st.session_state:
+        _render_error_page(st.session_state["_auth_error"])
+        return
+
     params = st.query_params.to_dict()
 
     # 2. Handle OAuth callback
@@ -212,7 +217,8 @@ def require_auth(cookie_manager) -> None:
 
         code_verifier = _consume_state(state)
         if code_verifier is None:
-            _render_error_page("Authentication state is invalid or expired.")
+            st.session_state["_auth_error"] = "Authentication state is invalid or expired."
+            _render_error_page(st.session_state["_auth_error"])
             return
 
         try:
@@ -245,10 +251,11 @@ def require_auth(cookie_manager) -> None:
                     parts.append(f"**@{allowed_domain}** accounts")
                 if allowed_emails:
                     parts.append("specific allowed emails")
-                _render_error_page(
+                st.session_state["_auth_error"] = (
                     f"Access is restricted to {' or '.join(parts)}. "
                     f"You signed in as `{email}`."
                 )
+                _render_error_page(st.session_state["_auth_error"])
                 return
 
             user = {
@@ -263,7 +270,8 @@ def require_auth(cookie_manager) -> None:
             return
 
         except Exception as exc:
-            _render_error_page(f"Authentication failed: {exc}")
+            st.session_state["_auth_error"] = f"Authentication failed: {exc}"
+            _render_error_page(st.session_state["_auth_error"])
             return
 
     # 3. Check for existing session cookie
@@ -292,7 +300,9 @@ def _render_error_page(message: str) -> None:
 
     st.image("img/access-denied.png", use_container_width=True)
     st.error(message)
-    st.link_button("Back to home", _redirect_uri(), use_container_width=True, type="primary")
+    if st.button("Back to sign in", use_container_width=True, type="primary"):
+        st.session_state.pop("_auth_error", None)
+        st.rerun()
     st.stop()
 
 
