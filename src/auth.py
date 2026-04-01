@@ -29,7 +29,8 @@ SCOPES = [
 ]
 
 _COOKIE_NAME = "auth_session"
-_SESSION_TTL = 7 * 24 * 3600   # 7 days
+_SESSION_TTL_DAYS_DEFAULT = 30
+_SESSION_TTL = int(os.environ.get("SESSION_TTL_DAYS", _SESSION_TTL_DAYS_DEFAULT)) * 24 * 3600
 _STATE_TTL = 900                # 15 minutes
 
 
@@ -280,6 +281,9 @@ def require_auth(cookie_manager) -> None:
         user = _lookup_session(token)
         if user:
             st.session_state["_auth_user"] = user
+            # Refresh the cookie on each valid visit so the session window slides
+            # forward and active users aren't forced to re-authenticate.
+            cookie_manager.set(_COOKIE_NAME, token, max_age=_SESSION_TTL)
             return
 
     # 4. Show sign-in page
