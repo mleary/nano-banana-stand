@@ -29,7 +29,7 @@ def _init_session_state() -> None:
 
 
 st.set_page_config(
-    page_title="Banana Stand",
+    page_title="The Banana Stand",
     page_icon="img/favicon.png",
     layout="wide",
     initial_sidebar_state="collapsed",
