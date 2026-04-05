@@ -154,8 +154,6 @@ def _generate_gemini_with_reference(
     client = genai.Client(api_key=api_key)
 
     aspect_ratio = (settings or {}).get("aspect_ratio", "1:1")
-    if aspect_ratio != "1:1":
-        prompt = f"{prompt}. Output the image in {aspect_ratio} aspect ratio."
 
     parts = []
     for img in reference_images:
@@ -168,6 +166,9 @@ def _generate_gemini_with_reference(
         contents=parts,
         config=genai_types.GenerateContentConfig(
             response_modalities=["IMAGE"],
+            image_config=genai_types.ImageConfig(
+                aspect_ratio=aspect_ratio,
+            ),
         ),
     )
 
