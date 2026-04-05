@@ -11,7 +11,7 @@ Repository instructions for coding assistants.
 
 ## Commands
 
-- Run regression tests with `python3 -m unittest discover -s tests -v`.
+- Run regression tests with `python3 -m pytest tests/ -v`.
 - Start the app with `streamlit run app.py`.
 
 ## Working rules

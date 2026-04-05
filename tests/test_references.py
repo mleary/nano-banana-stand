@@ -1,42 +1,24 @@
-import os
-import tempfile
-import unittest
-from pathlib import Path
+import pytest
 
 from src import references
 
 
-class ReferenceStoreTests(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.previous_dir = os.environ.get("REFERENCES_DIR")
-        os.environ["REFERENCES_DIR"] = self.temp_dir.name
-
-    def tearDown(self):
-        if self.previous_dir is None:
-            os.environ.pop("REFERENCES_DIR", None)
-        else:
-            os.environ["REFERENCES_DIR"] = self.previous_dir
-        self.temp_dir.cleanup()
-
-    def test_save_reference_rejects_path_traversal_names(self):
-        with self.assertRaisesRegex(ValueError, "must contain letters or numbers"):
-            references.save_reference("../..", b"image-bytes", "png")
-
-    def test_save_reference_normalizes_name_and_extension(self):
-        saved = references.save_reference("Team Logo", b"image-bytes", "PNG")
-
-        self.assertEqual(saved.name, "team_logo.png")
-        self.assertEqual(saved.read_bytes(), b"image-bytes")
-
-    def test_resolve_references_matches_normalized_name(self):
-        Path(self.temp_dir.name, "Team_Logo.PNG").write_bytes(b"image-bytes")
-
-        found, missing = references.resolve_references(["team logo"])
-
-        self.assertEqual(found, [b"image-bytes"])
-        self.assertEqual(missing, [])
+def test_save_reference_rejects_path_traversal_names(tmp_references_dir):
+    with pytest.raises(ValueError, match="must contain letters or numbers"):
+        references.save_reference("../..", b"image-bytes", "png")
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_save_reference_normalizes_name_and_extension(tmp_references_dir):
+    saved = references.save_reference("Team Logo", b"image-bytes", "PNG")
+
+    assert saved.name == "team_logo.png"
+    assert saved.read_bytes() == b"image-bytes"
+
+
+def test_resolve_references_matches_normalized_name(tmp_references_dir):
+    (tmp_references_dir / "Team_Logo.PNG").write_bytes(b"image-bytes")
+
+    found, missing = references.resolve_references(["team logo"])
+
+    assert found == [b"image-bytes"]
+    assert missing == []
