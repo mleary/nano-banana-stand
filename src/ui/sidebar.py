@@ -9,6 +9,7 @@ import streamlit as st
 
 from src.auth import get_user, is_configured, logout
 from src.generator import PROVIDERS, get_provider_api_key
+from src.theme import toggle_theme
 
 
 @dataclass
@@ -66,6 +67,12 @@ def render_sidebar(cookie_manager) -> SidebarConfig:
             if model == "dall-e-3":
                 settings["quality"] = st.selectbox("Quality", ["standard", "hd"])
                 settings["style"] = st.selectbox("Style", ["vivid", "natural"])
+
+        st.divider()
+        theme = st.session_state.get("theme", "light")
+        label = "☀️ Light mode" if theme == "dark" else "🌙 Dark mode"
+        if st.button(label, width="stretch"):
+            toggle_theme(cookie_manager)
 
     return SidebarConfig(
         provider=provider,

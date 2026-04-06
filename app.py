@@ -15,6 +15,7 @@ from src.ui.history_tab import render_history_tab
 from src.ui.presets_tab import render_presets_tab
 from src.ui.references_tab import render_references_tab
 from src.ui.sidebar import render_sidebar
+from src.theme import apply_theme, init_theme
 
 
 def _default_session_state(key: str, value) -> None:
@@ -49,6 +50,8 @@ st.markdown(
 
 _cookie_manager = CookieManager(key="nano_banana_auth")
 require_auth(_cookie_manager)
+init_theme(_cookie_manager)
+apply_theme()
 db.init_db()
 _init_session_state()
 
