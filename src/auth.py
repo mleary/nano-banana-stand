@@ -278,7 +278,9 @@ def require_auth(cookie_manager) -> None:
             token = _create_session(user["email"], user["name"], user["picture"])
             _set_session_cookie(cookie_manager, token)
             st.session_state["_auth_user"] = user
-            st.rerun()
+            # Do NOT call st.rerun() here. query_params were already cleared
+            # above, and rerunning before the browser executes the CookieManager
+            # JS would race the cookie write — the cookie would never be stored.
             return
 
         except Exception as exc:
@@ -286,8 +288,18 @@ def require_auth(cookie_manager) -> None:
             _render_error_page(st.session_state["_auth_error"])
             return
 
-    # 3. Check for existing session cookie
-    token = cookie_manager.get(_COOKIE_NAME)
+    # 3. Wait for CookieManager JS to load on first render.
+    # get_all() returns None until the component has mounted and communicated
+    # back the browser's cookies. {} means loaded but genuinely no cookies.
+    # Stopping here lets the component-triggered rerun bring us back with real
+    # cookie data, preventing a false "not logged in" on every page load.
+    all_cookies = cookie_manager.get_all()
+    if all_cookies is None:
+        st.stop()
+        return
+
+    # 4. Check for existing session cookie
+    token = all_cookies.get(_COOKIE_NAME)
     if token:
         user = _lookup_session(token)
         if user:
