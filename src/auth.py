@@ -17,6 +17,7 @@ import os
 import secrets
 import sqlite3
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -133,6 +134,16 @@ def _delete_session(token: str) -> None:
     conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
     conn.commit()
     conn.close()
+
+
+def _set_session_cookie(cookie_manager, token: str) -> None:
+    """Set the auth session cookie with the configured TTL.
+
+    ``extra_streamlit_components.CookieManager.set`` expects ``expires_at`` as
+    a ``datetime`` object (not a ``max_age`` integer), so we convert here.
+    """
+    expires_at = datetime.now() + timedelta(seconds=_SESSION_TTL)
+    cookie_manager.set(_COOKIE_NAME, token, expires_at=expires_at)
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +276,7 @@ def require_auth(cookie_manager) -> None:
                 "picture": id_info.get("picture", ""),
             }
             token = _create_session(user["email"], user["name"], user["picture"])
-            cookie_manager.set(_COOKIE_NAME, token, max_age=_SESSION_TTL)
+            _set_session_cookie(cookie_manager, token)
             st.session_state["_auth_user"] = user
             st.rerun()
             return
@@ -283,7 +294,7 @@ def require_auth(cookie_manager) -> None:
             st.session_state["_auth_user"] = user
             # Refresh the cookie on each valid visit so the session window slides
             # forward and active users aren't forced to re-authenticate.
-            cookie_manager.set(_COOKIE_NAME, token, max_age=_SESSION_TTL)
+            _set_session_cookie(cookie_manager, token)
             return
 
     # 4. Show sign-in page
