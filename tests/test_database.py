@@ -37,6 +37,50 @@ def test_save_and_get_generation(tmp_db_path):
     assert row["model"] == "imagen-4.0"
 
 
+def test_save_generation_with_short_description(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(
+        base_prompt="A banana",
+        final_prompt="A ripe banana on a table",
+        provider="google-gemini",
+        output_path="/tmp/banana.png",
+        short_description="Ripe banana sitting on wooden table",
+    )
+
+    row = db.get_generation(gen_id)
+    assert row["short_description"] == "Ripe banana sitting on wooden table"
+
+
+def test_update_short_description(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(
+        base_prompt="A banana",
+        final_prompt="A banana",
+        provider="google-gemini",
+        output_path="/tmp/banana.png",
+    )
+    assert db.get_generation(gen_id)["short_description"] is None
+
+    db.update_short_description(gen_id, "Yellow banana on wooden surface")
+    assert db.get_generation(gen_id)["short_description"] == "Yellow banana on wooden surface"
+
+
+def test_get_generations_missing_descriptions(tmp_db_path):
+    db.init_db()
+
+    id1 = db.save_generation(base_prompt="a", final_prompt="a", provider="p", output_path="/1")
+    db.save_generation(
+        base_prompt="b", final_prompt="b", provider="p", output_path="/2",
+        short_description="already has one",
+    )
+
+    missing = db.get_generations_missing_descriptions()
+    assert len(missing) == 1
+    assert missing[0]["id"] == id1
+
+
 def test_save_generation_stores_settings_as_json(tmp_db_path):
     db.init_db()
 

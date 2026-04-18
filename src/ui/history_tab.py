@@ -7,7 +7,7 @@ import json
 import streamlit as st
 
 from src import database as db
-from src.generator import PROVIDERS
+from src.generator import PROVIDERS, get_provider_api_key
 from src.storage import load_image_bytes
 
 _PROMPT_PREVIEW_LEN = 40
@@ -22,6 +22,34 @@ def _reuse_generation_inputs(generation: dict) -> None:
         saved_model if saved_model in PROVIDERS[generation["provider"]]["models"] else default_model
     )
     st.rerun()
+
+
+def _render_backfill_section() -> None:
+    missing = db.get_generations_missing_descriptions()
+    if not missing:
+        return
+
+    provider = st.session_state.get("provider", "google-gemini")
+    api_key = get_provider_api_key(provider)
+
+    st.divider()
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.caption(f"{len(missing)} history item(s) are missing short descriptions.")
+    with col2:
+        if not api_key:
+            st.caption("Set API key to backfill.")
+        elif st.button("Backfill descriptions", key="backfill_btn"):
+            from src.services.description_service import generate_short_description
+            progress = st.progress(0, text="Generating descriptions…")
+            for i, gen in enumerate(missing):
+                desc = generate_short_description(gen["base_prompt"], api_key)
+                if desc:
+                    db.update_short_description(gen["id"], desc)
+                progress.progress((i + 1) / len(missing), text=f"Processing {i + 1}/{len(missing)}…")
+            progress.empty()
+            st.rerun()
+    st.divider()
 
 
 def render_history_tab() -> None:
@@ -41,9 +69,12 @@ def render_history_tab() -> None:
         st.info("No generations yet. Head to ✨ Generate to create your first image.")
         return
 
+    _render_backfill_section()
+
     st.caption(f"{len(generations)} generation(s) found.")
     for generation in generations:
-        label = generation.get("title") or f"Generation #{generation['id']}"
+        short_desc = generation.get("short_description")
+        label = short_desc or generation.get("title") or f"Generation #{generation['id']}"
         raw_prompt = generation.get("base_prompt") or ""
         prompt_preview = raw_prompt[:_PROMPT_PREVIEW_LEN] + ("…" if len(raw_prompt) > _PROMPT_PREVIEW_LEN else "")
         with st.expander(f"**{label}** — {generation['created_at'][:19]} | {generation['provider']} | {prompt_preview}"):
@@ -63,6 +94,8 @@ def render_history_tab() -> None:
                     st.warning("Image file not found.")
 
             with c_detail:
+                if short_desc:
+                    st.markdown(f"**Description:** {short_desc}")
                 st.markdown(f"**Base prompt:** {generation['base_prompt']}")
                 if generation.get("style_prompt"):
                     st.markdown(f"**Style prompt:** {generation['style_prompt']}")

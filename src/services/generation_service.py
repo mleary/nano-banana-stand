@@ -8,6 +8,7 @@ from typing import Any
 from src import database as db
 from src.generator import PROVIDERS, GenerationResult, generate_image
 from src.references import resolve_references
+from src.services.description_service import generate_short_description
 from src.storage import load_image_bytes
 
 
@@ -32,6 +33,7 @@ class GenerationOutcome:
     result: GenerationResult
     image_bytes: bytes | None
     missing_references: list[str] = field(default_factory=list)
+    short_description: str | None = None
 
 
 def _normalize_optional_text(value: str) -> str | None:
@@ -68,6 +70,8 @@ def generate_and_store(request: GenerationRequest) -> GenerationOutcome:
         reference_images=inline_reference_bytes or None,
     )
 
+    short_description = generate_short_description(request.base_prompt, request.api_key)
+
     generation_id = db.save_generation(
         base_prompt=request.base_prompt,
         final_prompt=result.final_prompt,
@@ -79,6 +83,7 @@ def generate_and_store(request: GenerationRequest) -> GenerationOutcome:
         style_prompt=_normalize_optional_text(request.style_prompt),
         model=result.model,
         settings=result.settings,
+        short_description=short_description,
     )
 
     return GenerationOutcome(
@@ -86,4 +91,5 @@ def generate_and_store(request: GenerationRequest) -> GenerationOutcome:
         result=result,
         image_bytes=load_image_bytes(result.output_path),
         missing_references=missing_references,
+        short_description=short_description,
     )

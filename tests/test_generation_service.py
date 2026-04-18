@@ -10,6 +10,7 @@ from src.services.generation_service import (
 )
 
 
+
 def test_validate_generation_request_rejects_reference_tokens_for_openai():
     request = GenerationRequest(
         base_prompt="A launch image",
@@ -38,7 +39,12 @@ def test_validate_generation_request_rejects_reference_tokens_for_openai():
     "src.services.generation_service.resolve_references",
     return_value=([b"inline-ref"], ["missing_logo"]),
 )
+@patch(
+    "src.services.generation_service.generate_short_description",
+    return_value="Launch image clean editorial style",
+)
 def test_generate_and_store_persists_normalized_metadata(
+    mock_desc,
     mock_resolve,
     mock_generate,
     mock_save,
@@ -62,8 +68,10 @@ def test_generate_and_store_persists_normalized_metadata(
     assert outcome.generation_id == 42
     assert outcome.image_bytes == b"image-bytes"
     assert outcome.missing_references == ["missing_logo"]
+    assert outcome.short_description == "Launch image clean editorial style"
     mock_resolve.assert_called_once_with(["logo"])
     mock_generate.assert_called_once()
+    mock_desc.assert_called_once_with("A launch image", "test-key")
     mock_save.assert_called_once_with(
         base_prompt="A launch image",
         final_prompt="Better prompt",
@@ -75,5 +83,6 @@ def test_generate_and_store_persists_normalized_metadata(
         style_prompt="Clean editorial",
         model="imagen-4.0-generate-001",
         settings={"aspect_ratio": "16:9"},
+        short_description="Launch image clean editorial style",
     )
     mock_load.assert_called_once_with("/tmp/generated.png")

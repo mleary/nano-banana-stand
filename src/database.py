@@ -37,10 +37,17 @@ def init_db():
             model TEXT,
             settings TEXT,
             output_path TEXT,
+            short_description TEXT,
             created_at TEXT NOT NULL
         );
     """)
     conn.commit()
+    # Migration: add short_description to databases created before this column existed
+    try:
+        conn.execute("ALTER TABLE generations ADD COLUMN short_description TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.close()
 
 
@@ -55,13 +62,14 @@ def save_generation(
     style_prompt: str = None,
     model: str = None,
     settings: dict = None,
+    short_description: str = None,
 ) -> int:
     conn = get_connection()
     cursor = conn.execute(
         """INSERT INTO generations
            (title, project_name, tags, base_prompt, style_prompt,
-            final_prompt, provider, model, settings, output_path, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            final_prompt, provider, model, settings, output_path, short_description, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             title,
             project_name,
@@ -73,6 +81,7 @@ def save_generation(
             model,
             json.dumps(settings or {}),
             output_path,
+            short_description,
             datetime.utcnow().isoformat(),
         ),
     )
@@ -80,6 +89,25 @@ def save_generation(
     conn.commit()
     conn.close()
     return row_id
+
+
+def update_short_description(gen_id: int, short_description: str) -> None:
+    conn = get_connection()
+    conn.execute(
+        "UPDATE generations SET short_description = ? WHERE id = ?",
+        (short_description, gen_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_generations_missing_descriptions() -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM generations WHERE short_description IS NULL OR short_description = '' ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_generations(project_name: str = None, search: str = None) -> list[dict]:
@@ -121,5 +149,3 @@ def get_projects() -> list[str]:
     ).fetchall()
     conn.close()
     return [r[0] for r in rows]
-
-
