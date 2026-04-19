@@ -29,8 +29,7 @@ def _render_backfill_section() -> None:
     if not missing:
         return
 
-    provider = st.session_state.get("provider", "google-gemini")
-    api_key = get_provider_api_key(provider)
+    api_key = get_provider_api_key("google-gemini")
 
     st.divider()
     col1, col2 = st.columns([3, 1])
@@ -38,7 +37,7 @@ def _render_backfill_section() -> None:
         st.caption(f"{len(missing)} history item(s) are missing short descriptions.")
     with col2:
         if not api_key:
-            st.caption("Set API key to backfill.")
+            st.caption("Gemini API key required to backfill.")
         elif st.button("Backfill descriptions", key="backfill_btn"):
             from src.services.description_service import generate_short_description
             progress = st.progress(0, text="Generating descriptions…")
