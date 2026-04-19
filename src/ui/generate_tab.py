@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
+from src import database as db
 from src import presets as preset_store
 from src import references as ref_store
 from src.generator import PROVIDERS
@@ -115,50 +118,76 @@ def render_generate_tab(sidebar_config: SidebarConfig) -> None:
             sidebar_config.settings,
         )
 
-    if not generate_button:
+    if generate_button:
+        st.session_state.pop("last_generation", None)
+
+        request = GenerationRequest(
+            base_prompt=base_prompt,
+            style_prompt=style_prompt,
+            provider=sidebar_config.provider,
+            model=sidebar_config.model,
+            api_key=sidebar_config.api_key,
+            settings=sidebar_config.settings,
+            reference_image=reference_image_bytes,
+            reference_tokens=reference_tokens,
+            title=title,
+            project_name=project_name,
+            tags=tags,
+        )
+
+        with st.spinner("Generating…"):
+            try:
+                outcome = generate_and_store(request)
+            except Exception as exc:
+                st.error(f"Generation failed: {exc}")
+                return
+
+        st.session_state.last_generation = {
+            "id": outcome.generation_id,
+            "image_bytes": outcome.image_bytes,
+            "final_prompt": outcome.result.final_prompt,
+            "output_path": outcome.result.output_path,
+            "provider": outcome.result.provider,
+            "model": outcome.result.model,
+            "settings": outcome.result.settings,
+            "missing_references": outcome.missing_references,
+        }
+
+    last_gen = st.session_state.get("last_generation")
+    if last_gen is None:
         return
 
-    request = GenerationRequest(
-        base_prompt=base_prompt,
-        style_prompt=style_prompt,
-        provider=sidebar_config.provider,
-        model=sidebar_config.model,
-        api_key=sidebar_config.api_key,
-        settings=sidebar_config.settings,
-        reference_image=reference_image_bytes,
-        reference_tokens=reference_tokens,
-        title=title,
-        project_name=project_name,
-        tags=tags,
-    )
+    if last_gen.get("missing_references"):
+        st.warning(f"Reference(s) not found in library: {', '.join(last_gen['missing_references'])}")
 
-    with st.spinner("Generating…"):
-        try:
-            outcome = generate_and_store(request)
-        except Exception as exc:
-            st.error(f"Generation failed: {exc}")
-            return
+    if last_gen.get("image_bytes"):
+        st.image(last_gen["image_bytes"], caption=last_gen["final_prompt"])
 
-    if outcome.missing_references:
-        st.warning(f"Reference(s) not found in library: {', '.join(outcome.missing_references)}")
-
-    if outcome.image_bytes:
-        st.image(outcome.image_bytes, caption=outcome.result.final_prompt)
-        st.download_button(
-            "Download",
-            data=outcome.image_bytes,
-            file_name=f"generation_{outcome.generation_id}.png",
-            mime="image/png",
-        )
+        btn_col1, btn_col2 = st.columns([1, 1])
+        with btn_col1:
+            st.download_button(
+                "Download",
+                data=last_gen["image_bytes"],
+                file_name=f"generation_{last_gen['id']}.png",
+                mime="image/png",
+            )
+        with btn_col2:
+            if st.button("Delete", type="secondary"):
+                db.delete_generation(last_gen["id"])
+                output_path = last_gen.get("output_path")
+                if output_path:
+                    Path(output_path).unlink(missing_ok=True)
+                del st.session_state.last_generation
+                st.rerun()
 
     with st.expander("Generation details"):
         st.json(
             {
-                "id": outcome.generation_id,
-                "provider": outcome.result.provider,
-                "model": outcome.result.model,
-                "final_prompt": outcome.result.final_prompt,
-                "settings": outcome.result.settings,
-                "output_path": outcome.result.output_path,
+                "id": last_gen["id"],
+                "provider": last_gen["provider"],
+                "model": last_gen["model"],
+                "final_prompt": last_gen["final_prompt"],
+                "settings": last_gen["settings"],
+                "output_path": last_gen["output_path"],
             }
         )
