@@ -10,7 +10,7 @@ from src import database as db
 from src.generator import PROVIDERS, get_provider_api_key
 from src.storage import load_image_bytes
 
-_PROMPT_PREVIEW_LEN = 40
+_THUMB_COLS = 4
 
 
 def _reuse_generation_inputs(generation: dict) -> None:
@@ -22,6 +22,11 @@ def _reuse_generation_inputs(generation: dict) -> None:
         saved_model if saved_model in PROVIDERS[generation["provider"]]["models"] else default_model
     )
     st.rerun()
+
+
+@st.cache_data(show_spinner=False)
+def _load_thumb(output_path: str) -> bytes | None:
+    return load_image_bytes(output_path or "")
 
 
 def _render_backfill_section() -> None:
@@ -40,6 +45,7 @@ def _render_backfill_section() -> None:
             st.caption("Gemini API key required to backfill.")
         elif st.button("Backfill descriptions", key="backfill_btn"):
             from src.services.description_service import generate_short_description
+
             progress = st.progress(0, text="Generating descriptions…")
             for i, gen in enumerate(missing):
                 desc = generate_short_description(gen["base_prompt"], api_key)
@@ -49,6 +55,91 @@ def _render_backfill_section() -> None:
             progress.empty()
             st.rerun()
     st.divider()
+
+
+def _render_detail_panel(generation: dict) -> None:
+    image_bytes = _load_thumb(generation["output_path"] or "")
+
+    st.divider()
+
+    short_desc = generation.get("short_description")
+    label = short_desc or generation.get("title") or f"Generation #{generation['id']}"
+    st.subheader(label)
+    st.caption(f"{generation['created_at'][:19]} · {generation['provider']} · {generation.get('model', '')}")
+
+    c_img, c_detail = st.columns([2, 3])
+    with c_img:
+        if image_bytes:
+            st.image(image_bytes, use_container_width=True)
+            st.download_button(
+                "Download",
+                data=image_bytes,
+                file_name=f"gen_{generation['id']}.png",
+                mime="image/png",
+                key=f"dl_{generation['id']}",
+            )
+        else:
+            st.warning("Image file not found.")
+
+    with c_detail:
+        st.markdown(f"**Base prompt:** {generation['base_prompt']}")
+        if generation.get("style_prompt"):
+            st.markdown(f"**Style:** {generation['style_prompt']}")
+        if generation.get("final_prompt") != generation.get("base_prompt"):
+            st.markdown(f"**Final prompt:** {generation['final_prompt']}")
+        if generation.get("project_name"):
+            st.markdown(f"**Project:** {generation['project_name']}")
+        if generation.get("tags"):
+            st.markdown(f"**Tags:** {generation['tags']}")
+        if generation.get("settings"):
+            try:
+                settings_dict = json.loads(generation["settings"])
+                if settings_dict:
+                    st.json(settings_dict, expanded=False)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        with btn_col1:
+            if st.button("Reuse prompt", key=f"rerun_{generation['id']}", use_container_width=True):
+                _reuse_generation_inputs(generation)
+        with btn_col2:
+            if st.button("Close", key=f"close_{generation['id']}", use_container_width=True):
+                st.session_state.history_selected_id = None
+                st.rerun()
+        with btn_col3:
+            if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary", use_container_width=True):
+                db.delete_generation(generation["id"])
+                st.session_state.history_selected_id = None
+                st.rerun()
+
+
+def _render_thumbnail_grid(generations: list[dict]) -> None:
+    selected_id = st.session_state.get("history_selected_id")
+
+    for row_start in range(0, len(generations), _THUMB_COLS):
+        row = generations[row_start : row_start + _THUMB_COLS]
+        cols = st.columns(_THUMB_COLS)
+        for col, generation in zip(cols, row):
+            with col:
+                image_bytes = _load_thumb(generation["output_path"] or "")
+                gen_id = generation["id"]
+                is_selected = gen_id == selected_id
+
+                if image_bytes:
+                    st.image(image_bytes, use_container_width=True)
+                else:
+                    st.markdown("_No image_")
+
+                short_desc = generation.get("short_description")
+                caption = short_desc or generation.get("title") or f"#{gen_id}"
+                st.caption(caption)
+
+                btn_label = "✓ Selected" if is_selected else "View"
+                btn_type = "primary" if is_selected else "secondary"
+                if st.button(btn_label, key=f"sel_{gen_id}", use_container_width=True, type=btn_type):
+                    st.session_state.history_selected_id = None if is_selected else gen_id
+                    st.rerun()
 
 
 def render_history_tab() -> None:
@@ -71,53 +162,13 @@ def render_history_tab() -> None:
     _render_backfill_section()
 
     st.caption(f"{len(generations)} generation(s) found.")
-    for generation in generations:
-        short_desc = generation.get("short_description")
-        label = short_desc or generation.get("title") or f"Generation #{generation['id']}"
-        raw_prompt = generation.get("base_prompt") or ""
-        prompt_preview = raw_prompt[:_PROMPT_PREVIEW_LEN] + ("…" if len(raw_prompt) > _PROMPT_PREVIEW_LEN else "")
-        with st.expander(f"**{label}** — {generation['created_at'][:19]} | {generation['provider']} | {prompt_preview}"):
-            c_img, c_detail = st.columns([2, 3])
-            with c_img:
-                image_bytes = load_image_bytes(generation["output_path"] or "")
-                if image_bytes:
-                    st.image(image_bytes)
-                    st.download_button(
-                        "Download",
-                        data=image_bytes,
-                        file_name=f"gen_{generation['id']}.png",
-                        mime="image/png",
-                        key=f"dl_{generation['id']}",
-                    )
-                else:
-                    st.warning("Image file not found.")
 
-            with c_detail:
-                if short_desc:
-                    st.markdown(f"**Description:** {short_desc}")
-                st.markdown(f"**Base prompt:** {generation['base_prompt']}")
-                if generation.get("style_prompt"):
-                    st.markdown(f"**Style prompt:** {generation['style_prompt']}")
-                if generation.get("final_prompt") != generation.get("base_prompt"):
-                    st.markdown(f"**Final prompt:** {generation['final_prompt']}")
-                st.markdown(f"**Provider:** `{generation['provider']}` / `{generation.get('model', '')}`")
-                if generation.get("project_name"):
-                    st.markdown(f"**Project:** {generation['project_name']}")
-                if generation.get("tags"):
-                    st.markdown(f"**Tags:** {generation['tags']}")
-                if generation.get("settings"):
-                    try:
-                        settings_dict = json.loads(generation["settings"])
-                        if settings_dict:
-                            st.json(settings_dict)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+    _render_thumbnail_grid(generations)
 
-                btn_col1, btn_col2 = st.columns([1, 1])
-                with btn_col1:
-                    if st.button("Reuse prompt", key=f"rerun_{generation['id']}"):
-                        _reuse_generation_inputs(generation)
-                with btn_col2:
-                    if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary"):
-                        db.delete_generation(generation["id"])
-                        st.rerun()
+    selected_id = st.session_state.get("history_selected_id")
+    if selected_id:
+        selected = next((g for g in generations if g["id"] == selected_id), None)
+        if selected:
+            _render_detail_panel(selected)
+        else:
+            st.session_state.history_selected_id = None
