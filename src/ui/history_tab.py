@@ -25,7 +25,7 @@ def _reuse_generation_inputs(generation: dict) -> None:
 
 
 @st.cache_data(show_spinner=False)
-def _load_thumb(output_path: str) -> bytes | None:
+def _load_thumb(output_path: str | None) -> bytes | None:
     return load_image_bytes(output_path or "")
 
 
@@ -58,7 +58,7 @@ def _render_backfill_section() -> None:
 
 
 def _render_detail_panel(generation: dict) -> None:
-    image_bytes = _load_thumb(generation["output_path"] or "")
+    image_bytes = _load_thumb(generation["output_path"])
 
     st.divider()
 
@@ -122,7 +122,7 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
         cols = st.columns(_THUMB_COLS)
         for col, generation in zip(cols, row):
             with col:
-                image_bytes = _load_thumb(generation["output_path"] or "")
+                image_bytes = _load_thumb(generation["output_path"])
                 gen_id = generation["id"]
                 is_selected = gen_id == selected_id
 
@@ -172,3 +172,4 @@ def render_history_tab() -> None:
             _render_detail_panel(selected)
         else:
             st.session_state.history_selected_id = None
+            st.rerun()
