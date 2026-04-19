@@ -58,5 +58,7 @@ jobs:
             After making changes, always run `python3 -m pytest tests/ -v` and fix
             any failures before proceeding. Once all tests pass, create a pull request
             from your branch using `gh pr create` with a clear title and description.
+            When triggered from a GitHub issue, include "Closes #<issue_number>" in the
+            PR body using the issue number from the triggering event.
           additional_permissions: |
             actions: read
