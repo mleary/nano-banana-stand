@@ -12,6 +12,7 @@ from src import references as ref_store
 from src.generator import PROVIDERS
 from src.references import parse_reference_tokens, reference_exists
 from src.services.generation_service import GenerationRequest, generate_and_store
+from src.storage import load_image_bytes
 from src.ui.sidebar import SidebarConfig
 
 
@@ -41,6 +42,36 @@ def _render_preset_picker() -> str:
     return preset["style_prompt"]
 
 
+@st.cache_data(show_spinner=False)
+def _load_gen_thumb(output_path: str | None) -> bytes | None:
+    return load_image_bytes(output_path or "")
+
+
+@st.dialog("Browse Generated Images", width="large")
+def _pick_generated_image() -> None:
+    generations = db.get_generations()
+    if not generations:
+        st.info("No generated images yet.")
+        return
+
+    _COLS = 3
+    for row_start in range(0, len(generations), _COLS):
+        row = generations[row_start : row_start + _COLS]
+        cols = st.columns(_COLS)
+        for col, gen in zip(cols, row):
+            with col:
+                thumb = _load_gen_thumb(gen["output_path"])
+                if thumb:
+                    st.image(thumb, use_container_width=True)
+                else:
+                    st.markdown("_No image_")
+                caption = gen.get("short_description") or gen.get("title") or f"#{gen['id']}"
+                st.caption(caption)
+                if st.button("Use this", key=f"pick_{gen['id']}", use_container_width=True):
+                    st.session_state.generated_ref_path = gen["output_path"]
+                    st.rerun()
+
+
 def _render_reference_picker(provider: str, settings: dict) -> bytes | None:
     saved_refs = ref_store.list_references()
     reference_image_bytes = None
@@ -49,7 +80,7 @@ def _render_reference_picker(provider: str, settings: dict) -> bytes | None:
     if provider == "google-gemini":
         ref_mode = st.radio(
             "Reference image",
-            ["None", "From library", "Upload"],
+            ["None", "From library", "Upload", "Previously Generated"],
             horizontal=True,
         )
         if ref_mode == "From library":
@@ -68,6 +99,20 @@ def _render_reference_picker(provider: str, settings: dict) -> bytes | None:
             )
             if reference_file is not None:
                 reference_image_bytes = reference_file.read()
+        elif ref_mode == "Previously Generated":
+            selected_path = st.session_state.get("generated_ref_path")
+            if selected_path:
+                thumb = _load_gen_thumb(selected_path)
+                if thumb:
+                    reference_image_bytes = thumb
+                    st.image(thumb, width=160)
+                else:
+                    st.caption("Selected image file not found.")
+                if st.button("Change…", key="change_generated_ref"):
+                    _pick_generated_image()
+            else:
+                if st.button("Browse generated images…", key="browse_generated_ref"):
+                    _pick_generated_image()
 
         st.divider()
         settings["aspect_ratio"] = st.selectbox(
