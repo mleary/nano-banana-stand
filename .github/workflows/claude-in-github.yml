@@ -28,8 +28,8 @@ jobs:
         github.event.review.author_association == 'MEMBER'))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
+      contents: write
+      pull-requests: write
       issues: read
       id-token: write
       actions: read
@@ -39,10 +39,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_tools: "Bash,Edit,Write,Read,Glob,Grep"
+          custom_instructions: |
+            After making changes, always run `python3 -m pytest tests/ -v` and fix
+            any failures before proceeding. Once all tests pass, create a pull request
+            from your branch using `gh pr create` with a clear title and description.
           additional_permissions: |
             actions: read
