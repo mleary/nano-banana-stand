@@ -23,6 +23,7 @@ def test_validate_generation_request_rejects_reference_tokens_for_openai():
         validate_generation_request(request)
 
 
+@patch("src.services.generation_service.get_provider_api_key", return_value="gemini-key")
 @patch("src.services.generation_service.load_image_bytes", return_value=b"image-bytes")
 @patch("src.services.generation_service.db.save_generation", return_value=42)
 @patch(
@@ -49,6 +50,7 @@ def test_generate_and_store_persists_normalized_metadata(
     mock_generate,
     mock_save,
     mock_load,
+    mock_get_key,
 ):
     request = GenerationRequest(
         base_prompt="A launch image",
@@ -71,7 +73,7 @@ def test_generate_and_store_persists_normalized_metadata(
     assert outcome.short_description == "Launch image clean editorial style"
     mock_resolve.assert_called_once_with(["logo"])
     mock_generate.assert_called_once()
-    mock_desc.assert_called_once_with("A launch image", "test-key")
+    mock_desc.assert_called_once_with("A launch image", "gemini-key")
     mock_save.assert_called_once_with(
         base_prompt="A launch image",
         final_prompt="Better prompt",
