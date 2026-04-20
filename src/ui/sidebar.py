@@ -7,6 +7,7 @@ from typing import Any
 
 import streamlit as st
 
+from src import database as db
 from src.auth import get_user, is_configured, logout
 from src.generator import PROVIDERS, get_provider_api_key
 from src.theme import toggle_theme
@@ -67,6 +68,17 @@ def render_sidebar(cookie_manager) -> SidebarConfig:
             if model == "dall-e-3":
                 settings["quality"] = st.selectbox("Quality", ["standard", "hd"])
                 settings["style"] = st.selectbox("Style", ["vivid", "natural"])
+
+        st.divider()
+        st.caption("💰 Estimated usage")
+        summary = db.get_cost_summary()
+        cost_col1, cost_col2, cost_col3 = st.columns(3)
+        with cost_col1:
+            st.metric("Today", f"${summary['today']:.2f}")
+        with cost_col2:
+            st.metric("Week", f"${summary['this_week']:.2f}")
+        with cost_col3:
+            st.metric("Month", f"${summary['this_month']:.2f}")
 
         st.divider()
         theme = st.session_state.get("theme", "light")
