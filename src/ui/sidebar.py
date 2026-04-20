@@ -72,13 +72,15 @@ def render_sidebar(cookie_manager) -> SidebarConfig:
         st.divider()
         st.caption("💰 Estimated usage")
         summary = db.get_cost_summary()
-        cost_col1, cost_col2, cost_col3 = st.columns(3)
-        with cost_col1:
-            st.metric("Today", f"${summary['today']:.2f}")
-        with cost_col2:
-            st.metric("Week", f"${summary['this_week']:.2f}")
-        with cost_col3:
-            st.metric("Month", f"${summary['this_month']:.2f}")
+        for label, key in [("Today", "today"), ("Week", "this_week"), ("Month", "this_month")]:
+            cents = summary[key] * 100
+            if cents < 1:
+                display = f"{cents:.2f}¢"
+            elif cents < 100:
+                display = f"{cents:.1f}¢"
+            else:
+                display = f"${summary[key]:.2f}"
+            st.caption(f"{label}: **{display}**")
 
         st.divider()
         theme = st.session_state.get("theme", "light")
