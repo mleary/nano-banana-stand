@@ -9,7 +9,7 @@ import streamlit as st
 from src import database as db
 from src import presets as preset_store
 from src import references as ref_store
-from src.generator import MODEL_PRICING, PROVIDERS
+from src.generator import MODEL_PRICING, PROVIDERS, REFERENCE_GENERATION_MODEL
 from src.references import parse_reference_tokens, reference_exists
 from src.services.generation_service import GenerationRequest, generate_and_store
 from src.storage import load_image_bytes
@@ -82,6 +82,7 @@ def _render_reference_picker(provider: str, settings: dict) -> bytes | None:
             "Reference image",
             ["None", "From library", "Upload", "Previously Generated"],
             horizontal=True,
+            key="reference_mode",
         )
         if ref_mode == "From library":
             ref_options = [path.name for path in saved_refs]
@@ -159,13 +160,29 @@ def render_generate_tab(sidebar_config: SidebarConfig) -> None:
                 return f"{label}  (~${cost:.2f}/img)"
             return label
 
-        st.selectbox(
-            "Model",
-            model_options,
-            index=model_options.index(st.session_state.selected_model),
-            key="selected_model",
-            format_func=_format_model,
+        using_reference = (
+            sidebar_config.provider == "google-gemini"
+            and st.session_state.get("reference_mode", "None") != "None"
         )
+
+        if using_reference:
+            st.selectbox(
+                "Model",
+                [REFERENCE_GENERATION_MODEL],
+                disabled=True,
+                format_func=lambda _: "Gemini Flash (auto — reference mode)",
+                help="Reference images require Gemini's multimodal model. Your saved model selection is preserved for non-reference generations.",
+            )
+        else:
+            if st.session_state.selected_model not in model_options:
+                st.session_state.selected_model = model_options[0]
+            st.selectbox(
+                "Model",
+                model_options,
+                index=model_options.index(st.session_state.selected_model),
+                key="selected_model",
+                format_func=_format_model,
+            )
 
         style_prompt = _render_preset_picker()
         reference_image_bytes = _render_reference_picker(
