@@ -91,7 +91,19 @@ def save_generation(
     return row_id
 
 
-def get_generations(project_name: str = None, search: str = None) -> list[dict]:
+_SORT_OPTIONS = {
+    "newest": "created_at DESC",
+    "oldest": "created_at ASC",
+    "title": "LOWER(COALESCE(title, '')) ASC",
+    "project": "LOWER(COALESCE(project_name, '')) ASC",
+}
+
+
+def get_generations(
+    project_name: str = None,
+    search: str = None,
+    sort_by: str = "newest",
+) -> list[dict]:
     conn = get_connection()
     query = "SELECT * FROM generations WHERE 1=1"
     params = []
@@ -101,7 +113,8 @@ def get_generations(project_name: str = None, search: str = None) -> list[dict]:
     if search:
         query += " AND (title LIKE ? OR base_prompt LIKE ? OR tags LIKE ?)"
         params.extend([f"%{search}%"] * 3)
-    query += " ORDER BY created_at DESC"
+    order = _SORT_OPTIONS.get(sort_by, "created_at DESC")
+    query += f" ORDER BY {order}"
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -119,6 +132,21 @@ def get_generation(gen_id: int) -> dict | None:
 def delete_generation(gen_id: int) -> None:
     conn = get_connection()
     conn.execute("DELETE FROM generations WHERE id = ?", (gen_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_generation_metadata(
+    gen_id: int,
+    title: str = None,
+    project_name: str = None,
+    tags: str = None,
+) -> None:
+    conn = get_connection()
+    conn.execute(
+        "UPDATE generations SET title = ?, project_name = ?, tags = ? WHERE id = ?",
+        (title, project_name, tags, gen_id),
+    )
     conn.commit()
     conn.close()
 
