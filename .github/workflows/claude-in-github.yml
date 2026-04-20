@@ -56,7 +56,7 @@ jobs:
           branch_prefix: "claude-"
           branch_name_template: "{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}-{{timestamp}}"
           claude_args: "--allowedTools Bash,Edit,Write,Read,Glob,Grep"
-          settings: |
+          prompt: |
             After making changes, always run `python3 -m pytest tests/ -v` and fix
             any failures before proceeding. Once all tests pass, create a pull request
             from your branch using `gh pr create` with a clear title and description.
