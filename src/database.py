@@ -91,25 +91,6 @@ def save_generation(
     return row_id
 
 
-def update_short_description(gen_id: int, short_description: str) -> None:
-    conn = get_connection()
-    conn.execute(
-        "UPDATE generations SET short_description = ? WHERE id = ?",
-        (short_description, gen_id),
-    )
-    conn.commit()
-    conn.close()
-
-
-def get_generations_missing_descriptions() -> list[dict]:
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM generations WHERE short_description IS NULL OR short_description = '' ORDER BY created_at DESC"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
 def get_generations(project_name: str = None, search: str = None) -> list[dict]:
     conn = get_connection()
     query = "SELECT * FROM generations WHERE 1=1"
