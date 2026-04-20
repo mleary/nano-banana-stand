@@ -17,9 +17,6 @@
       "Bash(ls:*)",
       "Bash(R:*)",
       "Bash(rm:*)",
-      "Bash(Rscript:*)",
-      "Bash(sed:*)",
-      "Read(~/documents/llms/ellmer/*)",
       "Skill(*)",
       "WebFetch(domain:cran.r-project.org)",
       "WebFetch(domain:github.com)",
@@ -29,7 +26,10 @@
     ],
     "deny": [
       "Read(.Renviron)", 
-      "Read(.env)"
+      "Read(.env)",
+      "Bash(gh pr review --approve:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git push:*)"
     ]
   }
 }
