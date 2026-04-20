@@ -53,6 +53,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          branch_prefix: "claude-"
+          branch_name_template: "{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}-{{timestamp}}"
           claude_args: "--allowedTools Bash,Edit,Write,Read,Glob,Grep"
           settings: |
             After making changes, always run `python3 -m pytest tests/ -v` and fix
@@ -62,3 +64,13 @@ jobs:
             PR body using the issue number from the triggering event.
           additional_permissions: |
             actions: read
+
+      - name: Create QA safety branch from main
+        if: steps.claude.outputs.branch_name != ''
+        run: |
+          BRANCH="${{ steps.claude.outputs.branch_name }}"
+          QA_BRANCH="qa-${BRANCH}"
+          git fetch origin main
+          git checkout -b "$QA_BRANCH" origin/main
+          git push origin "$QA_BRANCH"
+          echo "Created safety branch: $QA_BRANCH"
