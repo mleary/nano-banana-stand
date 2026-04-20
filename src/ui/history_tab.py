@@ -7,7 +7,7 @@ import json
 import streamlit as st
 
 from src import database as db
-from src.generator import PROVIDERS, get_provider_api_key
+from src.generator import PROVIDERS
 from src.storage import load_image_bytes
 
 _THUMB_COLS = 4
@@ -29,38 +29,9 @@ def _load_thumb(output_path: str | None) -> bytes | None:
     return load_image_bytes(output_path or "")
 
 
-def _render_backfill_section() -> None:
-    missing = db.get_generations_missing_descriptions()
-    if not missing:
-        return
-
-    api_key = get_provider_api_key("google-gemini")
-
-    st.divider()
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.caption(f"{len(missing)} history item(s) are missing short descriptions.")
-    with col2:
-        if not api_key:
-            st.caption("Gemini API key required to backfill.")
-        elif st.button("Backfill descriptions", key="backfill_btn"):
-            from src.services.description_service import generate_short_description
-
-            progress = st.progress(0, text="Generating descriptions…")
-            for i, gen in enumerate(missing):
-                desc = generate_short_description(gen["base_prompt"], api_key)
-                if desc:
-                    db.update_short_description(gen["id"], desc)
-                progress.progress((i + 1) / len(missing), text=f"Processing {i + 1}/{len(missing)}…")
-            progress.empty()
-            st.rerun()
-    st.divider()
-
-
-def _render_detail_panel(generation: dict) -> None:
+@st.dialog("Generation Details", width="large")
+def _show_detail_modal(generation: dict) -> None:
     image_bytes = _load_thumb(generation["output_path"])
-
-    st.divider()
 
     short_desc = generation.get("short_description")
     label = short_desc or generation.get("title") or f"Generation #{generation['id']}"
@@ -99,24 +70,17 @@ def _render_detail_panel(generation: dict) -> None:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button("Reuse prompt", key=f"rerun_{generation['id']}", use_container_width=True):
                 _reuse_generation_inputs(generation)
         with btn_col2:
-            if st.button("Close", key=f"close_{generation['id']}", use_container_width=True):
-                st.session_state.history_selected_id = None
-                st.rerun()
-        with btn_col3:
             if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary", use_container_width=True):
                 db.delete_generation(generation["id"])
-                st.session_state.history_selected_id = None
                 st.rerun()
 
 
 def _render_thumbnail_grid(generations: list[dict]) -> None:
-    selected_id = st.session_state.get("history_selected_id")
-
     for row_start in range(0, len(generations), _THUMB_COLS):
         row = generations[row_start : row_start + _THUMB_COLS]
         cols = st.columns(_THUMB_COLS)
@@ -124,7 +88,6 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
             with col:
                 image_bytes = _load_thumb(generation["output_path"])
                 gen_id = generation["id"]
-                is_selected = gen_id == selected_id
 
                 if image_bytes:
                     st.image(image_bytes, use_container_width=True)
@@ -135,11 +98,8 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
                 caption = short_desc or generation.get("title") or f"#{gen_id}"
                 st.caption(caption)
 
-                btn_label = "✓ Selected" if is_selected else "View"
-                btn_type = "primary" if is_selected else "secondary"
-                if st.button(btn_label, key=f"sel_{gen_id}", use_container_width=True, type=btn_type):
-                    st.session_state.history_selected_id = None if is_selected else gen_id
-                    st.rerun()
+                if st.button("View", key=f"sel_{gen_id}", use_container_width=True):
+                    _show_detail_modal(generation)
 
 
 def render_history_tab() -> None:
@@ -159,17 +119,6 @@ def render_history_tab() -> None:
         st.info("No generations yet. Head to ✨ Generate to create your first image.")
         return
 
-    _render_backfill_section()
-
     st.caption(f"{len(generations)} generation(s) found.")
 
     _render_thumbnail_grid(generations)
-
-    selected_id = st.session_state.get("history_selected_id")
-    if selected_id:
-        selected = next((g for g in generations if g["id"] == selected_id), None)
-        if selected:
-            _render_detail_panel(selected)
-        else:
-            st.session_state.history_selected_id = None
-            st.rerun()
