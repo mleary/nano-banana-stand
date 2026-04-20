@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src import database as db
-from src.generator import PROVIDERS, GenerationResult, generate_image, get_provider_api_key
+from src.generator import PROVIDERS, GenerationResult, generate_image, get_estimated_cost, get_provider_api_key
 from src.references import resolve_references
 from src.services.description_service import generate_short_description
 from src.storage import load_image_bytes
@@ -85,6 +85,7 @@ def generate_and_store(request: GenerationRequest) -> GenerationOutcome:
         model=result.model,
         settings=result.settings,
         short_description=short_description,
+        estimated_cost=get_estimated_cost(result.model),
     )
 
     return GenerationOutcome(

@@ -86,5 +86,6 @@ def test_generate_and_store_persists_normalized_metadata(
         model="imagen-4.0-generate-001",
         settings={"aspect_ratio": "16:9"},
         short_description="Launch image clean editorial style",
+        estimated_cost=0.04,
     )
     mock_load.assert_called_once_with("/tmp/generated.png")

@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 
@@ -48,6 +48,12 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass  # Column already exists
+    # Migration: add estimated_cost for cost tracking
+    try:
+        conn.execute("ALTER TABLE generations ADD COLUMN estimated_cost REAL")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.close()
 
 
@@ -63,13 +69,15 @@ def save_generation(
     model: str = None,
     settings: dict = None,
     short_description: str = None,
+    estimated_cost: float = None,
 ) -> int:
     conn = get_connection()
     cursor = conn.execute(
         """INSERT INTO generations
            (title, project_name, tags, base_prompt, style_prompt,
-            final_prompt, provider, model, settings, output_path, short_description, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            final_prompt, provider, model, settings, output_path,
+            short_description, estimated_cost, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             title,
             project_name,
@@ -82,6 +90,7 @@ def save_generation(
             json.dumps(settings or {}),
             output_path,
             short_description,
+            estimated_cost,
             datetime.utcnow().isoformat(),
         ),
     )
@@ -158,3 +167,27 @@ def get_projects() -> list[str]:
     ).fetchall()
     conn.close()
     return [r[0] for r in rows]
+
+
+def get_cost_summary() -> dict:
+    """Return estimated cost totals for today, this week (Mon–Sun), and this month."""
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())  # Monday
+    month_start = today.replace(day=1)
+
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT
+               COALESCE(SUM(CASE WHEN date(created_at) = ? THEN estimated_cost ELSE 0 END), 0) as today,
+               COALESCE(SUM(CASE WHEN date(created_at) >= ? THEN estimated_cost ELSE 0 END), 0) as this_week,
+               COALESCE(SUM(CASE WHEN date(created_at) >= ? THEN estimated_cost ELSE 0 END), 0) as this_month
+           FROM generations
+           WHERE estimated_cost IS NOT NULL""",
+        (today.isoformat(), week_start.isoformat(), month_start.isoformat()),
+    ).fetchone()
+    conn.close()
+    return {
+        "today": float(row["today"]),
+        "this_week": float(row["this_week"]),
+        "this_month": float(row["this_month"]),
+    }

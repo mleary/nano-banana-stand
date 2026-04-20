@@ -26,9 +26,17 @@ PROVIDERS = {
         "models": [
             "imagen-4.0-generate-001",
             "imagen-4.0-fast-generate-001",
+            "imagen-4.0-ultra-generate-001",
             "imagen-3.0-generate-002",
             "imagen-3.0-fast-generate-001",
         ],
+        "model_labels": {
+            "imagen-4.0-generate-001": "Imagen 4 Standard",
+            "imagen-4.0-fast-generate-001": "Imagen 4 Fast",
+            "imagen-4.0-ultra-generate-001": "Imagen 4 Ultra",
+            "imagen-3.0-generate-002": "Imagen 3",
+            "imagen-3.0-fast-generate-001": "Imagen 3 Fast",
+        },
         "api_key_env": "GOOGLE_API_KEY",
         "requires": ["google-genai"],
     },
@@ -36,10 +44,31 @@ PROVIDERS = {
         "label": "OpenAI (optional)",
         "default_model": "dall-e-3",
         "models": ["dall-e-3", "dall-e-2"],
+        "model_labels": {
+            "dall-e-3": "DALL-E 3",
+            "dall-e-2": "DALL-E 2",
+        },
         "api_key_env": "OPENAI_API_KEY",
         "requires": ["openai"],
     },
 }
+
+# Estimated cost per image in USD (sourced from provider pricing pages).
+# Used for display labels and usage tracking — not billed directly by this app.
+MODEL_PRICING: dict[str, float] = {
+    "imagen-4.0-ultra-generate-001": 0.06,
+    "imagen-4.0-generate-001": 0.04,
+    "imagen-4.0-fast-generate-001": 0.02,
+    "imagen-3.0-generate-002": 0.03,
+    "imagen-3.0-fast-generate-001": 0.02,
+    "dall-e-3": 0.04,
+    "dall-e-2": 0.02,
+}
+
+
+def get_estimated_cost(model: str) -> float | None:
+    """Return estimated cost per image in USD for the given model, or None if unknown."""
+    return MODEL_PRICING.get(model)
 
 REFERENCE_GENERATION_MODEL = "gemini-2.5-flash-image"
 

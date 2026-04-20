@@ -2,6 +2,9 @@
 
 import json
 import time
+from datetime import date, timedelta
+
+import pytest
 
 from src import database as db
 
@@ -201,3 +204,135 @@ def test_get_projects_returns_distinct_names(tmp_db_path):
 
     projects = db.get_projects()
     assert projects == ["alpha", "beta"]
+
+
+def test_save_generation_stores_estimated_cost(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(
+        base_prompt="A banana",
+        final_prompt="A banana",
+        provider="google-gemini",
+        output_path="/tmp/banana.png",
+        estimated_cost=0.04,
+    )
+
+    row = db.get_generation(gen_id)
+    assert row["estimated_cost"] == 0.04
+
+
+def test_save_generation_estimated_cost_defaults_to_none(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(
+        base_prompt="A banana",
+        final_prompt="A banana",
+        provider="google-gemini",
+        output_path="/tmp/banana.png",
+    )
+
+    row = db.get_generation(gen_id)
+    assert row["estimated_cost"] is None
+
+
+def test_get_cost_summary_empty_db(tmp_db_path):
+    db.init_db()
+
+    summary = db.get_cost_summary()
+    assert summary == {"today": 0.0, "this_week": 0.0, "this_month": 0.0}
+
+
+def test_get_cost_summary_counts_today(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(
+        base_prompt="a", final_prompt="a", provider="p", output_path="/1",
+        estimated_cost=0.04,
+    )
+
+    summary = db.get_cost_summary()
+    assert summary["today"] == pytest.approx(0.04)
+    assert summary["this_week"] == pytest.approx(0.04)
+    assert summary["this_month"] == pytest.approx(0.04)
+
+
+def test_get_cost_summary_excludes_no_cost_rows(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(base_prompt="a", final_prompt="a", provider="p", output_path="/1")
+    db.save_generation(
+        base_prompt="b", final_prompt="b", provider="p", output_path="/2",
+        estimated_cost=0.02,
+    )
+
+    summary = db.get_cost_summary()
+    assert summary["today"] == pytest.approx(0.02)
+
+
+def test_get_cost_summary_sums_multiple_rows(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(
+        base_prompt="a", final_prompt="a", provider="p", output_path="/1",
+        estimated_cost=0.04,
+    )
+    db.save_generation(
+        base_prompt="b", final_prompt="b", provider="p", output_path="/2",
+        estimated_cost=0.02,
+    )
+
+    summary = db.get_cost_summary()
+    assert summary["today"] == pytest.approx(0.06)
+    assert summary["this_week"] == pytest.approx(0.06)
+    assert summary["this_month"] == pytest.approx(0.06)
+
+
+def test_get_cost_summary_week_boundary(tmp_db_path):
+    db.init_db()
+
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    last_sunday = monday - timedelta(days=1)
+
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT INTO generations
+           (base_prompt, final_prompt, provider, output_path, estimated_cost, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        ("old", "old", "p", "/old", 0.10, last_sunday.isoformat() + "T00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    db.save_generation(
+        base_prompt="new", final_prompt="new", provider="p", output_path="/new",
+        estimated_cost=0.04,
+    )
+
+    summary = db.get_cost_summary()
+    assert summary["this_week"] == pytest.approx(0.04)
+
+
+def test_get_cost_summary_month_boundary(tmp_db_path):
+    db.init_db()
+
+    today = date.today()
+    last_month_last_day = today.replace(day=1) - timedelta(days=1)
+
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT INTO generations
+           (base_prompt, final_prompt, provider, output_path, estimated_cost, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        ("old", "old", "p", "/old", 0.10, last_month_last_day.isoformat() + "T00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    db.save_generation(
+        base_prompt="new", final_prompt="new", provider="p", output_path="/new",
+        estimated_cost=0.04,
+    )
+
+    summary = db.get_cost_summary()
+    assert summary["this_month"] == pytest.approx(0.04)

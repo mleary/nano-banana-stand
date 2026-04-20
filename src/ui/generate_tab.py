@@ -9,7 +9,7 @@ import streamlit as st
 from src import database as db
 from src import presets as preset_store
 from src import references as ref_store
-from src.generator import PROVIDERS
+from src.generator import MODEL_PRICING, PROVIDERS
 from src.references import parse_reference_tokens, reference_exists
 from src.services.generation_service import GenerationRequest, generate_and_store
 from src.storage import load_image_bytes
@@ -150,11 +150,21 @@ def render_generate_tab(sidebar_config: SidebarConfig) -> None:
 
     with col_right:
         model_options = PROVIDERS[sidebar_config.provider]["models"]
+        model_labels = PROVIDERS[sidebar_config.provider].get("model_labels", {})
+
+        def _format_model(model_id: str) -> str:
+            label = model_labels.get(model_id, model_id)
+            cost = MODEL_PRICING.get(model_id)
+            if cost is not None:
+                return f"{label}  (~${cost:.2f}/img)"
+            return label
+
         st.selectbox(
             "Model",
             model_options,
             index=model_options.index(st.session_state.selected_model),
             key="selected_model",
+            format_func=_format_model,
         )
 
         style_prompt = _render_preset_picker()
