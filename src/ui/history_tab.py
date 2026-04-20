@@ -12,6 +12,20 @@ from src.storage import load_image_bytes
 
 _THUMB_COLS = 4
 
+_SORT_LABELS = {
+    "newest": "Newest first",
+    "oldest": "Oldest first",
+    "title": "Title (A–Z)",
+    "project": "Project (A–Z)",
+}
+
+
+def _normalize(value: str | None) -> str | None:
+    if not value:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
 
 def _reuse_generation_inputs(generation: dict) -> None:
     st.session_state.rerun_base_prompt = generation["base_prompt"]
@@ -70,6 +84,32 @@ def _show_detail_modal(generation: dict) -> None:
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        with st.expander("Edit metadata"):
+            new_title = st.text_input(
+                "Title",
+                value=generation.get("title") or "",
+                key=f"edit_title_{generation['id']}",
+            )
+            new_project = st.text_input(
+                "Project",
+                value=generation.get("project_name") or "",
+                key=f"edit_project_{generation['id']}",
+            )
+            new_tags = st.text_input(
+                "Tags",
+                value=generation.get("tags") or "",
+                key=f"edit_tags_{generation['id']}",
+                placeholder="comma-separated",
+            )
+            if st.button("Save metadata", key=f"save_meta_{generation['id']}", use_container_width=True):
+                db.update_generation_metadata(
+                    gen_id=generation["id"],
+                    title=_normalize(new_title),
+                    project_name=_normalize(new_project),
+                    tags=_normalize(new_tags),
+                )
+                st.rerun()
+
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if st.button("Reuse prompt", key=f"rerun_{generation['id']}", use_container_width=True):
@@ -105,15 +145,21 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
 def render_history_tab() -> None:
     st.header("Generation History")
 
-    col_filter1, col_filter2 = st.columns(2)
+    col_filter1, col_filter2, col_sort = st.columns(3)
     with col_filter1:
         projects = ["All projects"] + db.get_projects()
         selected_project = st.selectbox("Filter by project", projects)
     with col_filter2:
         search_query = st.text_input("Search prompts / titles / tags", placeholder="roadmap…")
+    with col_sort:
+        sort_key = st.selectbox(
+            "Sort by",
+            options=list(_SORT_LABELS.keys()),
+            format_func=lambda k: _SORT_LABELS[k],
+        )
 
     project_filter = None if selected_project == "All projects" else selected_project
-    generations = db.get_generations(project_name=project_filter, search=search_query)
+    generations = db.get_generations(project_name=project_filter, search=search_query, sort_by=sort_key)
 
     if not generations:
         st.info("No generations yet. Head to ✨ Generate to create your first image.")

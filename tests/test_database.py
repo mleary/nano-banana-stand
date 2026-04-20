@@ -131,6 +131,67 @@ def test_delete_generation(tmp_db_path):
     assert db.get_generation(gen_id) is None
 
 
+def test_update_generation_metadata(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(base_prompt="a", final_prompt="a", provider="p", output_path="/1")
+    db.update_generation_metadata(gen_id, title="My Title", project_name="Proj", tags="foo,bar")
+
+    row = db.get_generation(gen_id)
+    assert row["title"] == "My Title"
+    assert row["project_name"] == "Proj"
+    assert row["tags"] == "foo,bar"
+
+
+def test_update_generation_metadata_clears_fields(tmp_db_path):
+    db.init_db()
+
+    gen_id = db.save_generation(
+        base_prompt="a", final_prompt="a", provider="p", output_path="/1",
+        title="Old", project_name="OldProj", tags="old",
+    )
+    db.update_generation_metadata(gen_id, title=None, project_name=None, tags=None)
+
+    row = db.get_generation(gen_id)
+    assert row["title"] is None
+    assert row["project_name"] is None
+    assert row["tags"] is None
+
+
+def test_get_generations_sort_oldest_first(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(base_prompt="first", final_prompt="first", provider="p", output_path="/1")
+    time.sleep(0.01)
+    db.save_generation(base_prompt="second", final_prompt="second", provider="p", output_path="/2")
+
+    rows = db.get_generations(sort_by="oldest")
+    assert rows[0]["base_prompt"] == "first"
+    assert rows[1]["base_prompt"] == "second"
+
+
+def test_get_generations_sort_by_title(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(base_prompt="b", final_prompt="b", provider="p", output_path="/2", title="Zebra")
+    db.save_generation(base_prompt="a", final_prompt="a", provider="p", output_path="/1", title="Apple")
+
+    rows = db.get_generations(sort_by="title")
+    assert rows[0]["title"] == "Apple"
+    assert rows[1]["title"] == "Zebra"
+
+
+def test_get_generations_sort_by_project(tmp_db_path):
+    db.init_db()
+
+    db.save_generation(base_prompt="b", final_prompt="b", provider="p", output_path="/2", project_name="Zoo")
+    db.save_generation(base_prompt="a", final_prompt="a", provider="p", output_path="/1", project_name="Alpha")
+
+    rows = db.get_generations(sort_by="project")
+    assert rows[0]["project_name"] == "Alpha"
+    assert rows[1]["project_name"] == "Zoo"
+
+
 def test_get_projects_returns_distinct_names(tmp_db_path):
     db.init_db()
 
