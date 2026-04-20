@@ -201,7 +201,14 @@ def _generate_gemini_with_reference(
         ),
     )
 
-    for part in response.candidates[0].content.parts:
+    candidate = response.candidates[0] if response.candidates else None
+    if not candidate or not candidate.content:
+        raise RuntimeError(
+            "Gemini returned no image data for reference-guided generation. "
+            "The response may have been blocked by a safety filter."
+        )
+
+    for part in candidate.content.parts:
         if part.inline_data is not None:
             return part.inline_data.data, "png"
 

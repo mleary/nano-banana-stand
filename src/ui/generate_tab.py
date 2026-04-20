@@ -62,12 +62,12 @@ def _pick_generated_image() -> None:
             with col:
                 thumb = _load_gen_thumb(gen["output_path"])
                 if thumb:
-                    st.image(thumb, use_container_width=True)
+                    st.image(thumb, width="stretch")
                 else:
                     st.markdown("_No image_")
                 caption = gen.get("short_description") or gen.get("title") or f"#{gen['id']}"
                 st.caption(caption)
-                if st.button("Use this", key=f"pick_{gen['id']}", use_container_width=True):
+                if st.button("Use this", key=f"pick_{gen['id']}", width="stretch"):
                     st.session_state.generated_ref_path = gen["output_path"]
                     st.rerun()
 

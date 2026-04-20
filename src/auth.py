@@ -325,9 +325,9 @@ def _render_error_page(message: str) -> None:
         unsafe_allow_html=True,
     )
 
-    st.image("img/access-denied.png", use_container_width=True)
+    st.image("img/access-denied.png", width="stretch")
     st.error(message)
-    if st.button("Back to sign in", use_container_width=True, type="primary"):
+    if st.button("Back to sign in", width="stretch", type="primary"):
         st.session_state.pop("_auth_error", None)
         st.rerun()
     st.stop()
@@ -395,13 +395,13 @@ def _render_login_page() -> None:
 
     col_l, col_c, col_r = st.columns([1, 2, 1])
     with col_c:
-        st.link_button("Sign in with Google", auth_url, use_container_width=True, type="primary")
+        st.link_button("Sign in with Google", auth_url, width="stretch", type="primary")
         st.caption(domain_note)
 
     col_a, col_b = st.columns(2)
     with col_a:
-        st.image("img/banana-logo.png", use_container_width=True)
+        st.image("img/banana-logo.png", width="stretch")
     with col_b:
-        st.image("img/banana-painter.png", use_container_width=True)
+        st.image("img/banana-painter.png", width="stretch")
 
     st.stop()

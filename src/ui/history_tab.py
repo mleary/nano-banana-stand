@@ -55,7 +55,7 @@ def _show_detail_modal(generation: dict) -> None:
     c_img, c_detail = st.columns([2, 3])
     with c_img:
         if image_bytes:
-            st.image(image_bytes, use_container_width=True)
+            st.image(image_bytes, width="stretch")
             st.download_button(
                 "Download",
                 data=image_bytes,
@@ -101,7 +101,7 @@ def _show_detail_modal(generation: dict) -> None:
                 key=f"edit_tags_{generation['id']}",
                 placeholder="comma-separated",
             )
-            if st.button("Save metadata", key=f"save_meta_{generation['id']}", use_container_width=True):
+            if st.button("Save metadata", key=f"save_meta_{generation['id']}", width="stretch"):
                 db.update_generation_metadata(
                     gen_id=generation["id"],
                     title=_normalize(new_title),
@@ -112,10 +112,10 @@ def _show_detail_modal(generation: dict) -> None:
 
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            if st.button("Reuse prompt", key=f"rerun_{generation['id']}", use_container_width=True):
+            if st.button("Reuse prompt", key=f"rerun_{generation['id']}", width="stretch"):
                 _reuse_generation_inputs(generation)
         with btn_col2:
-            if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary", use_container_width=True):
+            if st.button("Delete", key=f"del_gen_{generation['id']}", type="secondary", width="stretch"):
                 db.delete_generation(generation["id"])
                 st.rerun()
 
@@ -130,7 +130,7 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
                 gen_id = generation["id"]
 
                 if image_bytes:
-                    st.image(image_bytes, use_container_width=True)
+                    st.image(image_bytes, width="stretch")
                 else:
                     st.markdown("_No image_")
 
@@ -138,7 +138,7 @@ def _render_thumbnail_grid(generations: list[dict]) -> None:
                 caption = short_desc or generation.get("title") or f"#{gen_id}"
                 st.caption(caption)
 
-                if st.button("View", key=f"sel_{gen_id}", use_container_width=True):
+                if st.button("View", key=f"sel_{gen_id}", width="stretch"):
                     _show_detail_modal(generation)
 
 

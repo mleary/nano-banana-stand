@@ -75,6 +75,8 @@ jobs:
 
       - name: Create QA safety branch from main
         if: steps.claude.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="${{ steps.claude.outputs.branch_name }}"
           MAIN_SHA="${{ steps.main_snapshot.outputs.sha }}"
@@ -87,9 +89,11 @@ jobs:
             exit 1
           fi
           QA_BRANCH="qa/${BRANCH}"
-          if git ls-remote --exit-code --heads origin "$QA_BRANCH" >/dev/null 2>&1; then
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${QA_BRANCH}" >/dev/null 2>&1; then
             echo "QA branch already exists, skipping: $QA_BRANCH"
             exit 0
           fi
-          git push origin "${MAIN_SHA}:refs/heads/${QA_BRANCH}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${QA_BRANCH}" \
+            -f sha="$MAIN_SHA"
           echo "Created safety branch: $QA_BRANCH"
