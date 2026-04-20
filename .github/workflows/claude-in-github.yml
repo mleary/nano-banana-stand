@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      issues: read
+      issues: write
       id-token: write
       actions: read
     steps:
@@ -62,8 +62,6 @@ jobs:
             from your branch using `gh pr create` with a clear title and description.
             When triggered from a GitHub issue, include "Closes #<issue_number>" in the
             PR body using the issue number from the triggering event.
-          additional_permissions: |
-            actions: read
 
       - name: Create QA safety branch from main
         if: steps.claude.outputs.branch_name != ''
